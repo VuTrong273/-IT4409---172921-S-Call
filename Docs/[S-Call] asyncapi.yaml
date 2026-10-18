@@ -1,0 +1,1508 @@
+asyncapi: 3.0.0
+
+info:
+  title: S-Call WebSocket / Signaling API
+  version: 1.0.0
+  description: |
+    Đặc tả **sự kiện thời gian thực** của S-Call (BTL IT4409 - Nhóm 6). Một kết nối WebSocket duy nhất cho mỗi
+    tab trình duyệt phục vụ **ba** nhiệm vụ:
+
+    1. **Chat realtime** - tin nhắn mới, thu hồi, "Đã xem", "Đang soạn tin…".
+    2. **Presence** - Online/Offline của bạn bè, thông báo kết bạn, thay đổi nhóm.
+    3. **Signaling WebRTC** - điều phối cuộc gọi thoại/video 1-1 (Offer → Answer → ICE Candidate).
+       Dữ liệu âm thanh/hình ảnh đi **P2P** (qua STUN/TURN), WebSocket chỉ chuyển các bản tin báo hiệu.
+    Các thao tác *request/response* (đăng nhập, lấy lịch sử tin nhắn, tải tệp, quản trị…) nằm trong `openapi.yaml`.
+    Mọi sự kiện thay đổi dữ liệu qua REST (ví dụ gửi tin bằng `POST /conversations/{id}/messages`) cũng được phát
+    realtime cho các thành viên bằng các sự kiện ở đây.
+
+    ## 1. Kết nối và xác thực
+    1. Client có access token gọi `POST /api/v1/auth/ws-ticket` → nhận `ticket` (sống 60 giây, dùng một lần).
+    2. Mở `wss://<host>/ws?ticket=<ticket>`. Trình duyệt không gửi được header `Authorization` cho WebSocket,
+       vì vậy dùng ticket thay vì đưa JWT dài hạn lên URL (tránh lộ trong log).
+    3. Server xác thực và gửi sự kiện đầu tiên `connection.ready`. Client chỉ nên gửi sự kiện sau khi nhận nó.
+    4. Một người dùng có thể mở **nhiều kết nối** (nhiều tab/thiết bị); mọi sự kiện được gửi tới tất cả kết nối của họ.
+
+    Khi mất kết nối, client kết nối lại (exponential backoff 1s → 30s), xin ticket mới, rồi đồng bộ tin nhắn bị lỡ
+    bằng `GET /conversations/{id}/messages?after=<lastMessageId>`.
+
+    ## 2. Khuôn dạng bản tin (envelope)
+    Mọi frame là **JSON text** có dạng:
+
+    ```json
+    { "type": "message.send", "requestId": "c0a8…", "data": { } }
+    ```
+    | Trường | Ý nghĩa |
+    |---|---|
+    | `type` | Tên sự kiện (`message.send`, `call.offer`, …) |
+    | `requestId` | (Client → Server) UUID tùy chọn. Nếu có, server trả `ack` hoặc `error` mang đúng `requestId` đó. |
+    | `data` | Nội dung sự kiện |
+
+    Server → Client không có `requestId`, trừ `ack` / `error` là phản hồi của một yêu cầu.
+    Kích thước tối đa mỗi frame: **64 KB** (SDP của WebRTC luôn nhỏ hơn mức này).
+
+    ## 3. Heartbeat
+    Client gửi `ping` mỗi **25 giây**, server trả `pong`. Server đóng kết nối nếu **60 giây** không nhận được frame
+    nào (mã `4003`). Server cũng gửi WebSocket ping frame mức giao thức.
+
+    ## 4. Mã đóng kết nối (close code)
+    | Code | Ý nghĩa | Client nên |
+    |---|---|---|
+    | `1000` / `1001` | Đóng bình thường / server khởi động lại | Kết nối lại |
+    | `4001` | Ticket thiếu/sai/hết hạn | Làm mới token rồi xin ticket mới |
+    | `4002` | Phiên bị chấm dứt (xem `session.terminated`: bị khóa, bị xóa, đăng xuất, đổi mật khẩu…) | **Không** kết nối lại, về màn hình đăng nhập |
+    | `4003` | Quá hạn heartbeat | Kết nối lại |
+    | `4004` | Gửi quá nhanh (flood) | Chờ rồi kết nối lại |
+    | `4009` | Frame sai định dạng / quá lớn | Sửa lỗi client |
+
+    ## 5. Giới hạn tốc độ
+    `message.send` ≤ 20 tin / 10 giây; `typing.update` ≤ 1 / giây; `call.invite` ≤ 5 / phút;
+    `call.ice_candidate` ≤ 100 / cuộc gọi / 10 giây. Vượt giới hạn server trả `error` mã `RATE_LIMITED`;
+    vi phạm nặng bị đóng kết nối `4004`.
+
+    ## 6. Khóa trò chuyện bằng mã PIN trên WebSocket
+    Với hội thoại mà người nhận đã đặt PIN, server **không đẩy nội dung** qua kết nối chưa mở khóa: `message.new`
+    đến với `locked = true`, `message.content = null`, `message.attachments = []` (client chỉ hiển thị số tin
+    chưa đọc). Sau khi nhập đúng PIN qua REST (`POST /conversations/{id}/pin/verify`), client gửi
+    `conversation.unlock` kèm `unlockToken`; từ lúc đó, kết nối này nhận đầy đủ nội dung của hội thoại đó cho tới
+    khi hết hạn token hoặc client gửi `conversation.lock`. Bản thân gửi tin / đánh dấu đã xem / thu hồi tin trong
+    hội thoại đã khóa cũng yêu cầu kết nối đã mở khóa (nếu không → `error` `CONVERSATION_LOCKED`).
+
+    ## 7. Luồng gửi nhận tin nhắn
+    ```
+    Alice(browser)              Server                 Bob(browser)
+        | message.send ---------> |                         |
+        |                         |-- lưu PostgreSQL        |
+        | <------------- ack ---- |  (message đầy đủ)       |
+        |                         |--- message.new -------> |
+        |                         |   (+ các kết nối khác   |
+        |                         |    của Alice)           |
+        |                         | <--- message.read ----- |  (Bob mở khung chat)
+        | <-- conversation.read - |                         |  ("Đã xem")
+    ```
+    Mục tiêu: gửi → nhận **< 1 giây**. Kết nối gửi nhận `ack` (đã gửi); các kết nối còn lại của người gửi và mọi
+    thành viên khác nhận `message.new`.
+
+    ## 8. Luồng cuộc gọi WebRTC 1-1
+    Trước khi gọi, client lấy cấu hình STUN/TURN bằng `GET /api/v1/calls/ice-servers`.
+    ```
+    Caller                         Server                         Callee
+      | call.invite ------------->  |                               |
+      | <--------------- ack(callId)|-- call.incoming ----------->  |  (đổ chuông mọi tab)
+      |                             |                               |  (người nhận bấm Nghe máy)
+      |                             | <------------- call.accept -- |
+      | <------ call.accepted ----- |-- call.handled_elsewhere -->  |  (các tab khác của callee)
+      | (tạo RTCPeerConnection)     |                               |
+      | call.offer (SDP) ---------> |-- call.offer ---------------> |
+      | <-------------------------- |<------------- call.answer --- |  (callee getUserMedia, setRemoteDescription)
+      | <------ call.answer ------- |                               |
+      | call.ice_candidate <======> |<======> call.ice_candidate    |  (trickle ICE hai chiều)
+      |=============== Media P2P (SRTP) qua STUN / TURN ============|
+      | call.media_state ---------> |-- call.media_state ---------> |  (bật/tắt mic, camera, chia sẻ màn hình)
+      | call.end -----------------> |-- call.ended ---------------> |
+      | <------- call.ended ------- |   (+ tin nhắn hệ thống `message.new` type=call)
+    ```
+    Quy tắc:
+    * **Bên gọi (caller) luôn tạo Offer đầu tiên**, sau khi nhận `call.accepted`. Bên nhận tạo Answer.
+      ICE candidate đến sớm hơn `setRemoteDescription` phải được client xếp hàng đợi rồi mới `addIceCandidate`.
+    * Mỗi cuộc gọi gắn với **một kết nối duy nhất của mỗi bên**: kết nối của caller lúc `call.invite` và kết nối
+      của callee lúc `call.accept`. `call.offer/answer/ice_candidate/media_state/end` chỉ được chuyển giữa hai kết
+      nối này; các tab khác nhận `call.handled_elsewhere`.
+    * **Đàm phán lại** (bật/tắt chia sẻ màn hình, thêm camera): bên thay đổi gửi `call.offer` mới, bên kia trả
+      `call.answer` (áp dụng *perfect negotiation*; callee là *polite peer*). Cuộc gọi `voice` có thể nâng
+      cấp lên video theo cách này.
+    * Hết **30 giây** đổ chuông không ai nghe → `call.ended` với `status = missed`, `endReason = timeout`.
+      Callee không online ở thời điểm gọi → server kết thúc ngay với `missed`.
+      Callee đang bận cuộc gọi khác → `status = rejected`, `endReason = busy`.
+    * Mất kết nối WebSocket khi đang `ongoing`: server giữ cuộc gọi **10 giây** chờ kết nối lại; quá hạn →
+      `call.ended` (`endReason = disconnected`).
+    * Khi cuộc gọi kết thúc (kể cả nhỡ / từ chối / hủy), server tạo **tin nhắn hệ thống** `type = call` và phát
+      `message.new`, client dựng nội dung như "Cuộc gọi video - 03:15" hoặc "Cuộc gọi nhỡ".
+    * Chỉ gọi **1-1** giữa hai người **là bạn bè**, không bên nào chặn bên kia. Không có gọi nhóm.
+
+    ## 9. Bảo mật
+    * Bắt buộc `wss://` (HTTPS) ở môi trường công khai; WebRTC mã hóa media bằng DTLS-SRTP.
+    * Server **không tin** `userId` do client gửi: người gửi luôn lấy từ phiên đã xác thực.
+    * Mọi sự kiện có `conversationId` / `callId` đều được kiểm tra quyền thành viên / người tham gia.
+    * Tài khoản bị khóa/xóa → server gửi `session.terminated` rồi đóng kết nối với mã `4002` ngay lập tức.
+
+  contact:
+    name: Nhóm 6 - IT4409
+  license:
+    name: Academic use only
+
+defaultContentType: application/json
+
+servers:
+  development:
+    host: localhost:8080
+    pathname: /ws
+    protocol: ws
+    description: Môi trường phát triển (Docker Compose)
+    security:
+      - $ref: '#/components/securitySchemes/wsTicket'
+  production:
+    host: scall.example.com
+    pathname: /ws
+    protocol: wss
+    description: Triển khai công khai qua Cloudflare Tunnel (HTTPS/WSS)
+    security:
+      - $ref: '#/components/securitySchemes/wsTicket'
+
+channels:
+  realtime:
+    address: /ws
+    title: Kênh realtime
+    description: |
+      Kênh duy nhất, mọi sự kiện được phân biệt bằng trường `type` trong envelope.
+      Chiều **receive** = client gửi lên server; chiều **send** = server đẩy xuống client.
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          required: [ticket]
+          properties:
+            ticket:
+              type: string
+              description: Ticket một lần từ `POST /api/v1/auth/ws-ticket`.
+    messages:
+      # --- server -> client: hệ thống
+      connectionReady: { $ref: '#/components/messages/ConnectionReady' }
+      pong: { $ref: '#/components/messages/Pong' }
+      ack: { $ref: '#/components/messages/Ack' }
+      error: { $ref: '#/components/messages/Error' }
+      sessionTerminated: { $ref: '#/components/messages/SessionTerminated' }
+      # --- client -> server: hệ thống
+      ping: { $ref: '#/components/messages/Ping' }
+      # --- chat
+      messageSend: { $ref: '#/components/messages/MessageSend' }
+      messageRecall: { $ref: '#/components/messages/MessageRecall' }
+      messageRead: { $ref: '#/components/messages/MessageRead' }
+      typingUpdate: { $ref: '#/components/messages/TypingUpdate' }
+      conversationUnlock: { $ref: '#/components/messages/ConversationUnlock' }
+      conversationLock: { $ref: '#/components/messages/ConversationLock' }
+      messageNew: { $ref: '#/components/messages/MessageNew' }
+      messageRecalled: { $ref: '#/components/messages/MessageRecalled' }
+      conversationRead: { $ref: '#/components/messages/ConversationRead' }
+      typingUpdated: { $ref: '#/components/messages/TypingUpdated' }
+      # --- presence / xã hội / hội thoại
+      presenceUpdated: { $ref: '#/components/messages/PresenceUpdated' }
+      friendRequestReceived: { $ref: '#/components/messages/FriendRequestReceived' }
+      friendRequestAccepted: { $ref: '#/components/messages/FriendRequestAccepted' }
+      friendRemoved: { $ref: '#/components/messages/FriendRemoved' }
+      conversationCreated: { $ref: '#/components/messages/ConversationCreated' }
+      conversationUpdated: { $ref: '#/components/messages/ConversationUpdated' }
+      conversationMemberAdded: { $ref: '#/components/messages/ConversationMemberAdded' }
+      conversationMemberRemoved: { $ref: '#/components/messages/ConversationMemberRemoved' }
+      # --- cuộc gọi: client -> server
+      callInvite: { $ref: '#/components/messages/CallInvite' }
+      callAccept: { $ref: '#/components/messages/CallAccept' }
+      callReject: { $ref: '#/components/messages/CallReject' }
+      callCancel: { $ref: '#/components/messages/CallCancel' }
+      callEnd: { $ref: '#/components/messages/CallEnd' }
+      # --- cuộc gọi: hai chiều (relay)
+      callOffer: { $ref: '#/components/messages/CallOffer' }
+      callAnswer: { $ref: '#/components/messages/CallAnswer' }
+      callIceCandidate: { $ref: '#/components/messages/CallIceCandidate' }
+      callMediaState: { $ref: '#/components/messages/CallMediaState' }
+      # --- cuộc gọi: server -> client
+      callIncoming: { $ref: '#/components/messages/CallIncoming' }
+      callAccepted: { $ref: '#/components/messages/CallAccepted' }
+      callHandledElsewhere: { $ref: '#/components/messages/CallHandledElsewhere' }
+      callEnded: { $ref: '#/components/messages/CallEnded' }
+
+operations:
+  # =====================================================================
+  # SYSTEM
+  # =====================================================================
+  onConnectionReady:
+    action: send
+    title: Server báo kết nối đã sẵn sàng
+    summary: Sự kiện đầu tiên sau khi xác thực thành công.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/connectionReady'
+  receivePing:
+    action: receive
+    title: Client gửi heartbeat
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/ping'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/pong'
+  sendAck:
+    action: send
+    title: Server xác nhận yêu cầu thành công
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/ack'
+  sendError:
+    action: send
+    title: Server báo lỗi cho một yêu cầu
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/error'
+  onSessionTerminated:
+    action: send
+    title: Server chấm dứt phiên (bị khóa, bị xóa, đăng xuất…)
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/sessionTerminated'
+
+  # =====================================================================
+  # CHAT
+  # =====================================================================
+  receiveMessageSend:
+    action: receive
+    title: Gửi tin nhắn
+    summary: Client gửi tin văn bản / hình ảnh / tệp vào một hội thoại.
+    description: |
+      Dữ liệu và quy tắc kiểm tra giống `POST /conversations/{id}/messages`: `text` cần `content`;
+      `image`/`file` cần `attachmentIds` đã tải lên qua REST. `clientMessageId` chống gửi trùng.
+      Phản hồi `ack` chứa `Message` đã lưu (**"Đã gửi"**).
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/messageSend'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveMessageRecall:
+    action: receive
+    title: Thu hồi tin nhắn
+    description: Tương đương `POST /messages/{messageId}/recall`. Chỉ người gửi.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/messageRecall'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveMessageRead:
+    action: receive
+    title: Đánh dấu đã xem
+    description: Tương đương `POST /conversations/{id}/read`. Con trỏ chỉ tăng, không giảm.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/messageRead'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveTypingUpdate:
+    action: receive
+    title: Báo đang soạn tin / ngừng soạn tin
+    description: |
+      Gửi `isTyping = true` khi người dùng gõ phím (lặp lại tối đa mỗi giây một lần khi còn gõ) và
+      `isTyping = false` khi xóa hết/gửi/rời khung chat. Server tự coi là ngừng gõ sau **5 giây** không nhận được
+      cập nhật. Không có `ack`, không lưu vào CSDL.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/typingUpdate'
+  receiveConversationUnlock:
+    action: receive
+    title: Mở khóa hội thoại trên kết nối này
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationUnlock'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveConversationLock:
+    action: receive
+    title: Khóa lại hội thoại trên kết nối này
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationLock'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+  onMessageNew:
+    action: send
+    title: Có tin nhắn mới
+    description: Gửi cho mọi thành viên (trừ kết nối vừa gửi, kết nối đó nhận `ack`). Bao gồm tin nhắn hệ thống cuộc gọi.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/messageNew'
+  onMessageRecalled:
+    action: send
+    title: Tin nhắn đã bị thu hồi
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/messageRecalled'
+  onConversationRead:
+    action: send
+    title: Một thành viên đã xem đến tin nhắn nào đó ("Đã xem")
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationRead'
+  onTypingUpdated:
+    action: send
+    title: Một thành viên đang soạn tin / đã ngừng
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/typingUpdated'
+
+  # =====================================================================
+  # PRESENCE / SOCIAL / CONVERSATION
+  # =====================================================================
+  onPresenceUpdated:
+    action: send
+    title: Bạn bè online / offline
+    description: |
+      Gửi cho bạn bè của người dùng khi **kết nối đầu tiên** được mở (online) hoặc **kết nối cuối cùng** đóng
+      sau 5 giây ân hạn (offline, kèm `lastSeenAt`, đồng thời ghi `users.last_seen_at`). Người dùng ẩn mình
+      sau khi bị khóa/vô hiệu hóa cũng được báo offline.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/presenceUpdated'
+  onFriendRequestReceived:
+    action: send
+    title: Nhận được lời mời kết bạn
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/friendRequestReceived'
+  onFriendRequestAccepted:
+    action: send
+    title: Lời mời kết bạn của bạn đã được chấp nhận
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/friendRequestAccepted'
+  onFriendRemoved:
+    action: send
+    title: Bị hủy kết bạn
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/friendRemoved'
+  onConversationCreated:
+    action: send
+    title: Bạn được thêm vào một hội thoại mới
+    description: Gửi khi tạo nhóm, khi được thêm vào nhóm, hoặc khi chấp nhận kết bạn tạo hội thoại 1-1.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationCreated'
+  onConversationUpdated:
+    action: send
+    title: Tên / ảnh đại diện nhóm thay đổi
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationUpdated'
+  onConversationMemberAdded:
+    action: send
+    title: Có thành viên mới trong nhóm
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationMemberAdded'
+  onConversationMemberRemoved:
+    action: send
+    title: Thành viên bị xóa / rời nhóm
+    description: Gửi cho các thành viên còn lại **và** cho người bị xóa (để client ẩn hội thoại).
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/conversationMemberRemoved'
+
+  # =====================================================================
+  # CALLS (SIGNALING)
+  # =====================================================================
+  receiveCallInvite:
+    action: receive
+    title: Bắt đầu cuộc gọi
+    description: |
+      Tạo cuộc gọi `ringing` và đẩy `call.incoming` cho mọi kết nối của người nhận. `ack` trả về `callId`.
+      Lỗi: `NOT_FOUND`, `FORBIDDEN` (không phải hội thoại 1-1 / không phải bạn bè), `USER_BLOCKED`,
+      `CALL_IN_PROGRESS` (bạn đang trong cuộc gọi khác hoặc hội thoại này đã có cuộc gọi đang diễn ra),
+      `CONVERSATION_LOCKED`.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callInvite'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveCallAccept:
+    action: receive
+    title: Nghe máy
+    description: Chỉ callee, khi cuộc gọi đang `ringing`. Kết nối gửi sự kiện này trở thành đầu cuối của callee.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callAccept'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveCallReject:
+    action: receive
+    title: Từ chối cuộc gọi đến
+    description: Chỉ callee, khi `ringing`. Kết thúc với `status = rejected`.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callReject'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveCallCancel:
+    action: receive
+    title: Hủy cuộc gọi đang đổ chuông
+    description: Chỉ caller, khi `ringing`. Kết thúc với `status = canceled`.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callCancel'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveCallEnd:
+    action: receive
+    title: Kết thúc cuộc gọi đang diễn ra
+    description: |
+      Caller hoặc callee, khi `ongoing`. `reason = failed` dùng khi kết nối ICE thất bại hoàn toàn.
+      Kết thúc với `status = ended` (hoặc `failed`).
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callEnd'
+    reply:
+      channel: { $ref: '#/channels/realtime' }
+      messages:
+        - $ref: '#/channels/realtime/messages/ack'
+        - $ref: '#/channels/realtime/messages/error'
+  receiveCallOffer:
+    action: receive
+    title: Gửi SDP Offer cho đối phương
+    description: Server chỉ **chuyển tiếp** (relay) nguyên vẹn tới đầu cuối còn lại, không phân tích SDP.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callOffer'
+  sendCallOffer:
+    action: send
+    title: Nhận SDP Offer từ đối phương
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callOffer'
+  receiveCallAnswer:
+    action: receive
+    title: Gửi SDP Answer cho đối phương
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callAnswer'
+  sendCallAnswer:
+    action: send
+    title: Nhận SDP Answer từ đối phương
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callAnswer'
+  receiveCallIceCandidate:
+    action: receive
+    title: Gửi ICE Candidate cho đối phương
+    description: Trickle ICE. Gửi cả candidate cuối với `candidate = null` (end-of-candidates) nếu cần.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callIceCandidate'
+  sendCallIceCandidate:
+    action: send
+    title: Nhận ICE Candidate từ đối phương
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callIceCandidate'
+  receiveCallMediaState:
+    action: receive
+    title: Báo trạng thái mic / camera / chia sẻ màn hình
+    description: |
+      Gửi mỗi khi người dùng bật/tắt mic, camera hoặc chia sẻ màn hình để giao diện đối phương hiển thị đúng
+      (ví dụ biểu tượng "đã tắt mic"). Khi `screenSharing = true` lần đầu, server đặt `calls.screen_shared = true`.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callMediaState'
+  sendCallMediaState:
+    action: send
+    title: Nhận trạng thái media của đối phương
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callMediaState'
+  onCallIncoming:
+    action: send
+    title: Có cuộc gọi đến (đổ chuông)
+    description: Gửi tới **mọi** kết nối của callee. Client hiển thị hộp thoại với nút Nghe máy / Từ chối.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callIncoming'
+  onCallAccepted:
+    action: send
+    title: Đối phương đã nghe máy
+    description: Gửi cho caller. Caller bắt đầu tạo RTCPeerConnection và gửi `call.offer`.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callAccepted'
+  onCallHandledElsewhere:
+    action: send
+    title: Cuộc gọi đã được xử lý ở tab/thiết bị khác
+    description: Gửi cho các kết nối khác của callee để tắt hộp thoại đổ chuông.
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callHandledElsewhere'
+  onCallEnded:
+    action: send
+    title: Cuộc gọi đã kết thúc
+    description: |
+      Sự kiện kết thúc **duy nhất** cho mọi trường hợp (kết thúc bình thường, nhỡ, từ chối, hủy, bận, lỗi mạng).
+      Gửi cho cả hai bên (mọi kết nối). Ngay sau đó server phát `message.new` (tin nhắn hệ thống `type = call`).
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - $ref: '#/channels/realtime/messages/callEnded'
+
+components:
+  securitySchemes:
+    wsTicket:
+      type: httpApiKey
+      in: query
+      name: ticket
+      description: Ticket sống 60 giây, dùng một lần, lấy từ `POST /api/v1/auth/ws-ticket` (xác thực bằng JWT).
+
+  # ---------------------------------------------------------------------
+  messages:
+    # ===== HỆ THỐNG =====
+    ConnectionReady:
+      name: connection.ready
+      title: connection.ready
+      summary: Server → Client. Kết nối đã xác thực.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: connection.ready }
+          data:
+            type: object
+            required: [userId, sessionId, serverTime, heartbeatIntervalSeconds, onlineFriendIds]
+            properties:
+              userId: { type: string, format: uuid }
+              sessionId: { type: string, format: uuid }
+              serverTime: { type: string, format: date-time }
+              heartbeatIntervalSeconds: { type: integer, example: 25 }
+              onlineFriendIds:
+                type: array
+                description: Ảnh chụp (snapshot) bạn bè đang online lúc kết nối.
+                items: { type: string, format: uuid }
+      examples:
+        - payload:
+            type: connection.ready
+            data:
+              userId: 0f9c1a12-7c0d-4b8e-9d6a-3a2a2f5b7e10
+              sessionId: 5a1b6c3d-1111-4a2b-8c3d-9e8f7a6b5c4d
+              serverTime: '2026-10-17T01:30:00Z'
+              heartbeatIntervalSeconds: 25
+              onlineFriendIds: [3fa85f64-5717-4562-b3fc-2c963f66afa6]
+    Ping:
+      name: ping
+      title: ping
+      summary: Client → Server. Heartbeat.
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { const: ping }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+      examples:
+        - payload: { type: ping }
+    Pong:
+      name: pong
+      title: pong
+      summary: Server → Client. Phản hồi `ping`.
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { const: pong }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            properties:
+              serverTime: { type: string, format: date-time }
+    Ack:
+      name: ack
+      title: ack
+      summary: Server → Client. Yêu cầu có `requestId` đã được xử lý thành công.
+      payload:
+        type: object
+        required: [type, requestId]
+        properties:
+          type: { const: ack }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            description: |
+              Tùy sự kiện gốc: `message.send` → `{ message }` · `message.recall` → `{ message }` ·
+              `call.invite` → `{ callId, call }` · `call.accept` → `{ callId }` · các sự kiện khác → `{}`.
+            additionalProperties: true
+      examples:
+        - payload:
+            type: ack
+            requestId: c0a80101-0000-4000-8000-000000000001
+            data:
+              message:
+                id: 10452
+                conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+                clientMessageId: 7b0c1f0e-6c1a-4d56-8c2b-0c9d1b6f6a11
+                sender: { id: 0f9c1a12-7c0d-4b8e-9d6a-3a2a2f5b7e10, username: alice_01, displayName: Alice, avatarUrl: null }
+                type: text
+                content: Chào bạn!
+                attachments: []
+                call: null
+                recalled: false
+                createdAt: '2026-10-17T01:30:00Z'
+    Error:
+      name: error
+      title: error
+      summary: Server → Client. Yêu cầu bị từ chối.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: error }
+          requestId:
+            $ref: '#/components/schemas/RequestId'
+          data:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum:
+                  - VALIDATION_ERROR
+                  - UNAUTHORIZED
+                  - FORBIDDEN
+                  - NOT_FOUND
+                  - USER_BLOCKED
+                  - INVALID_STATE
+                  - CONVERSATION_LOCKED
+                  - INVALID_PIN
+                  - RATE_LIMITED
+                  - CALL_IN_PROGRESS
+                  - UNKNOWN_EVENT
+                  - INTERNAL_ERROR
+              message: { type: string }
+              retryAfterSeconds: { type: integer }
+      examples:
+        - payload:
+            type: error
+            requestId: c0a80101-0000-4000-8000-000000000001
+            data: { code: USER_BLOCKED, message: Bạn không thể nhắn tin cho người dùng này }
+    SessionTerminated:
+      name: session.terminated
+      title: session.terminated
+      summary: Server → Client. Phiên bị chấm dứt, ngay sau đó server đóng kết nối mã `4002`.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: session.terminated }
+          data:
+            type: object
+            required: [reason]
+            properties:
+              reason:
+                type: string
+                enum: [banned, deleted, deactivated, logout, password_changed, session_revoked]
+              message: { type: string }
+      examples:
+        - payload:
+            type: session.terminated
+            data: { reason: banned, message: Tài khoản của bạn đã bị khóa bởi quản trị viên }
+
+    # ===== CHAT: client -> server =====
+    MessageSend:
+      name: message.send
+      title: message.send
+      summary: Client → Server. Gửi tin nhắn.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: message.send }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [conversationId, clientMessageId, type]
+            properties:
+              conversationId: { type: string, format: uuid }
+              clientMessageId: { type: string, format: uuid }
+              type:
+                type: string
+                enum: [text, image, file]
+              content: { type: string, maxLength: 5000 }
+              attachmentIds:
+                type: array
+                maxItems: 10
+                items: { type: string, format: uuid }
+      examples:
+        - payload:
+            type: message.send
+            requestId: c0a80101-0000-4000-8000-000000000001
+            data:
+              conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+              clientMessageId: 7b0c1f0e-6c1a-4d56-8c2b-0c9d1b6f6a11
+              type: text
+              content: Chào bạn!
+    MessageRecall:
+      name: message.recall
+      title: message.recall
+      summary: Client → Server. Thu hồi tin nhắn của mình.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: message.recall }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [messageId]
+            properties:
+              messageId: { type: integer, format: int64 }
+      examples:
+        - payload: { type: message.recall, requestId: c0a80101-0000-4000-8000-000000000002, data: { messageId: 10452 } }
+    MessageRead:
+      name: message.read
+      title: message.read
+      summary: Client → Server. Đã xem đến tin nhắn `lastReadMessageId`.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: message.read }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [conversationId, lastReadMessageId]
+            properties:
+              conversationId: { type: string, format: uuid }
+              lastReadMessageId: { type: integer, format: int64 }
+      examples:
+        - payload:
+            type: message.read
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, lastReadMessageId: 10452 }
+    TypingUpdate:
+      name: typing.update
+      title: typing.update
+      summary: Client → Server. Đang soạn tin / ngừng soạn tin.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: typing.update }
+          data:
+            type: object
+            required: [conversationId, isTyping]
+            properties:
+              conversationId: { type: string, format: uuid }
+              isTyping: { type: boolean }
+      examples:
+        - payload:
+            type: typing.update
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, isTyping: true }
+    ConversationUnlock:
+      name: conversation.unlock
+      title: conversation.unlock
+      summary: Client → Server. Mở khóa hội thoại trên kết nối này bằng `unlockToken` từ REST.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.unlock }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [conversationId, unlockToken]
+            properties:
+              conversationId: { type: string, format: uuid }
+              unlockToken: { type: string }
+      examples:
+        - payload:
+            type: conversation.unlock
+            requestId: c0a80101-0000-4000-8000-000000000003
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, unlockToken: eyJhbGciOi... }
+    ConversationLock:
+      name: conversation.lock
+      title: conversation.lock
+      summary: Client → Server. Khóa lại hội thoại trên kết nối này (ví dụ khi rời khung chat).
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.lock }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [conversationId]
+            properties:
+              conversationId: { type: string, format: uuid }
+
+    # ===== CHAT: server -> client =====
+    MessageNew:
+      name: message.new
+      title: message.new
+      summary: Server → Client. Có tin nhắn mới trong hội thoại.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: message.new }
+          data:
+            type: object
+            required: [message, locked]
+            properties:
+              message: { $ref: '#/components/schemas/Message' }
+              locked:
+                type: boolean
+                description: |
+                  `true` nếu hội thoại đang khóa PIN và kết nối này chưa mở khóa: `message.content = null`,
+                  `message.attachments = []`.
+      examples:
+        - payload:
+            type: message.new
+            data:
+              locked: false
+              message:
+                id: 10453
+                conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+                sender: { id: 3fa85f64-5717-4562-b3fc-2c963f66afa6, username: bob, displayName: Bob, avatarUrl: null }
+                type: text
+                content: Chào Alice
+                attachments: []
+                call: null
+                recalled: false
+                createdAt: '2026-10-17T01:30:02Z'
+        - payload:
+            type: message.new
+            data:
+              locked: false
+              message:
+                id: 10460
+                conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+                sender: { id: 3fa85f64-5717-4562-b3fc-2c963f66afa6, username: bob, displayName: Bob, avatarUrl: null }
+                type: call
+                content: null
+                attachments: []
+                call: { id: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11, callType: video, status: ended, callerId: 3fa85f64-5717-4562-b3fc-2c963f66afa6, durationSeconds: 195, screenShared: true, createdAt: '2026-10-17T01:40:00Z' }
+                recalled: false
+                createdAt: '2026-10-17T01:43:15Z'
+    MessageRecalled:
+      name: message.recalled
+      title: message.recalled
+      summary: Server → Client. Một tin nhắn đã bị người gửi thu hồi.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: message.recalled }
+          data:
+            type: object
+            required: [conversationId, messageId, recalledAt]
+            properties:
+              conversationId: { type: string, format: uuid }
+              messageId: { type: integer, format: int64 }
+              recalledAt: { type: string, format: date-time }
+      examples:
+        - payload:
+            type: message.recalled
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, messageId: 10452, recalledAt: '2026-10-17T01:35:00Z' }
+    ConversationRead:
+      name: conversation.read
+      title: conversation.read
+      summary: Server → Client. Một thành viên đã xem đến tin nhắn `lastReadMessageId` ("Đã xem").
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.read }
+          data:
+            type: object
+            required: [conversationId, userId, lastReadMessageId, readAt]
+            properties:
+              conversationId: { type: string, format: uuid }
+              userId:
+                type: string
+                format: uuid
+                description: Người vừa xem.
+              lastReadMessageId: { type: integer, format: int64 }
+              readAt: { type: string, format: date-time }
+      examples:
+        - payload:
+            type: conversation.read
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, userId: 3fa85f64-5717-4562-b3fc-2c963f66afa6, lastReadMessageId: 10452, readAt: '2026-10-17T01:30:05Z' }
+    TypingUpdated:
+      name: typing.updated
+      title: typing.updated
+      summary: Server → Client. Thành viên khác đang soạn tin / ngừng soạn tin.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: typing.updated }
+          data:
+            type: object
+            required: [conversationId, userId, isTyping]
+            properties:
+              conversationId: { type: string, format: uuid }
+              userId: { type: string, format: uuid }
+              isTyping: { type: boolean }
+      examples:
+        - payload:
+            type: typing.updated
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, userId: 3fa85f64-5717-4562-b3fc-2c963f66afa6, isTyping: true }
+
+    # ===== PRESENCE / XÃ HỘI / HỘI THOẠI =====
+    PresenceUpdated:
+      name: presence.updated
+      title: presence.updated
+      summary: Server → Client. Bạn bè online/offline.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: presence.updated }
+          data:
+            type: object
+            required: [userId, isOnline]
+            properties:
+              userId: { type: string, format: uuid }
+              isOnline: { type: boolean }
+              lastSeenAt:
+                type: string
+                format: date-time
+                nullable: true
+                description: Chỉ có khi `isOnline = false`.
+      examples:
+        - payload:
+            type: presence.updated
+            data: { userId: 3fa85f64-5717-4562-b3fc-2c963f66afa6, isOnline: false, lastSeenAt: '2026-10-17T01:50:00Z' }
+    FriendRequestReceived:
+      name: friend.request.received
+      title: friend.request.received
+      summary: Server → Client. Có lời mời kết bạn mới.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: friend.request.received }
+          data:
+            type: object
+            required: [request]
+            properties:
+              request: { $ref: '#/components/schemas/FriendRequest' }
+    FriendRequestAccepted:
+      name: friend.request.accepted
+      title: friend.request.accepted
+      summary: Server → Client. Lời mời kết bạn bạn đã gửi được chấp nhận.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: friend.request.accepted }
+          data:
+            type: object
+            required: [requestId, friend, conversationId]
+            properties:
+              requestId: { type: string, format: uuid }
+              friend: { $ref: '#/components/schemas/UserPresence' }
+              conversationId: { type: string, format: uuid }
+    FriendRemoved:
+      name: friend.removed
+      title: friend.removed
+      summary: Server → Client. Quan hệ bạn bè bị hủy (do hủy kết bạn hoặc chặn).
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: friend.removed }
+          data:
+            type: object
+            required: [userId]
+            properties:
+              userId: { type: string, format: uuid }
+    ConversationCreated:
+      name: conversation.created
+      title: conversation.created
+      summary: Server → Client. Bạn có hội thoại mới.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.created }
+          data:
+            type: object
+            required: [conversation]
+            properties:
+              conversation: { $ref: '#/components/schemas/ConversationBrief' }
+    ConversationUpdated:
+      name: conversation.updated
+      title: conversation.updated
+      summary: Server → Client. Tên/ảnh đại diện nhóm thay đổi.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.updated }
+          data:
+            type: object
+            required: [conversation]
+            properties:
+              conversation: { $ref: '#/components/schemas/ConversationBrief' }
+    ConversationMemberAdded:
+      name: conversation.member.added
+      title: conversation.member.added
+      summary: Server → Client. Thành viên mới được thêm vào nhóm.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.member.added }
+          data:
+            type: object
+            required: [conversationId, members, addedBy]
+            properties:
+              conversationId: { type: string, format: uuid }
+              members:
+                type: array
+                items: { $ref: '#/components/schemas/UserSummary' }
+              addedBy: { type: string, format: uuid }
+    ConversationMemberRemoved:
+      name: conversation.member.removed
+      title: conversation.member.removed
+      summary: Server → Client. Thành viên bị xóa hoặc đã rời nhóm.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: conversation.member.removed }
+          data:
+            type: object
+            required: [conversationId, userId, reason]
+            properties:
+              conversationId: { type: string, format: uuid }
+              userId: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [removed, left]
+              newAdminId:
+                type: string
+                format: uuid
+                nullable: true
+                description: Có khi Trưởng nhóm rời đi và quyền được chuyển cho người khác.
+
+    # ===== CUỘC GỌI: client -> server =====
+    CallInvite:
+      name: call.invite
+      title: call.invite
+      summary: Client → Server. Gọi thoại / video cho người trong hội thoại 1-1.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.invite }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [conversationId, callType]
+            properties:
+              conversationId: { type: string, format: uuid }
+              callType: { $ref: '#/components/schemas/CallType' }
+      examples:
+        - payload:
+            type: call.invite
+            requestId: c0a80101-0000-4000-8000-000000000010
+            data: { conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77, callType: video }
+    CallAccept:
+      name: call.accept
+      title: call.accept
+      summary: Client → Server. Callee nghe máy.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.accept }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data: { $ref: '#/components/schemas/CallRef' }
+    CallReject:
+      name: call.reject
+      title: call.reject
+      summary: Client → Server. Callee từ chối.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.reject }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data: { $ref: '#/components/schemas/CallRef' }
+    CallCancel:
+      name: call.cancel
+      title: call.cancel
+      summary: Client → Server. Caller hủy khi đang đổ chuông.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.cancel }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data: { $ref: '#/components/schemas/CallRef' }
+    CallEnd:
+      name: call.end
+      title: call.end
+      summary: Client → Server. Kết thúc cuộc gọi đang diễn ra.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.end }
+          requestId: { $ref: '#/components/schemas/RequestId' }
+          data:
+            type: object
+            required: [callId]
+            properties:
+              callId: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [hangup, failed]
+                default: hangup
+      examples:
+        - payload:
+            type: call.end
+            requestId: c0a80101-0000-4000-8000-000000000011
+            data: { callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11, reason: hangup }
+
+    # ===== CUỘC GỌI: relay hai chiều =====
+    CallOffer:
+      name: call.offer
+      title: call.offer
+      summary: Hai chiều (relay). SDP Offer.
+      description: |
+        Client gửi → server chuyển tới đối phương nguyên vẹn. Dùng cho Offer đầu tiên (caller) và
+        đàm phán lại (chia sẻ màn hình, thêm camera).
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.offer }
+          data: { $ref: '#/components/schemas/SessionDescription' }
+      examples:
+        - payload:
+            type: call.offer
+            data:
+              callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11
+              sdp: "v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\n..."
+    CallAnswer:
+      name: call.answer
+      title: call.answer
+      summary: Hai chiều (relay). SDP Answer.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.answer }
+          data: { $ref: '#/components/schemas/SessionDescription' }
+      examples:
+        - payload:
+            type: call.answer
+            data:
+              callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11
+              sdp: "v=0\r\no=- 2090867257481162394 2 IN IP4 127.0.0.1\r\n..."
+    CallIceCandidate:
+      name: call.ice_candidate
+      title: call.ice_candidate
+      summary: Hai chiều (relay). ICE Candidate (trickle ICE).
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.ice_candidate }
+          data:
+            type: object
+            required: [callId, candidate]
+            properties:
+              callId: { type: string, format: uuid }
+              candidate:
+                type: object
+                nullable: true
+                description: Giá trị `RTCIceCandidate.toJSON()`. `null` = hết candidate (end-of-candidates).
+                required: [candidate]
+                properties:
+                  candidate:
+                    type: string
+                    example: candidate:842163049 1 udp 1677729535 203.0.113.7 46154 typ srflx raddr 0.0.0.0 rport 0
+                  sdpMid: { type: string, nullable: true, example: '0' }
+                  sdpMLineIndex: { type: integer, nullable: true, example: 0 }
+                  usernameFragment: { type: string, nullable: true }
+    CallMediaState:
+      name: call.media_state
+      title: call.media_state
+      summary: Hai chiều (relay). Trạng thái mic / camera / chia sẻ màn hình của người gửi.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.media_state }
+          data:
+            type: object
+            required: [callId, audioEnabled, videoEnabled, screenSharing]
+            properties:
+              callId: { type: string, format: uuid }
+              audioEnabled: { type: boolean }
+              videoEnabled: { type: boolean }
+              screenSharing: { type: boolean }
+      examples:
+        - payload:
+            type: call.media_state
+            data: { callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11, audioEnabled: false, videoEnabled: true, screenSharing: false }
+
+    # ===== CUỘC GỌI: server -> client =====
+    CallIncoming:
+      name: call.incoming
+      title: call.incoming
+      summary: Server → Client. Có cuộc gọi đến.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.incoming }
+          data:
+            type: object
+            required: [callId, conversationId, callType, caller, ringTimeoutSeconds]
+            properties:
+              callId: { type: string, format: uuid }
+              conversationId: { type: string, format: uuid }
+              callType: { $ref: '#/components/schemas/CallType' }
+              caller: { $ref: '#/components/schemas/UserSummary' }
+              ringTimeoutSeconds: { type: integer, example: 30 }
+      examples:
+        - payload:
+            type: call.incoming
+            data:
+              callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11
+              conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+              callType: video
+              caller: { id: 0f9c1a12-7c0d-4b8e-9d6a-3a2a2f5b7e10, username: alice_01, displayName: Alice, avatarUrl: null }
+              ringTimeoutSeconds: 30
+    CallAccepted:
+      name: call.accepted
+      title: call.accepted
+      summary: Server → Client. Đối phương đã nghe máy, caller hãy tạo Offer.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.accepted }
+          data:
+            type: object
+            required: [callId, acceptedAt]
+            properties:
+              callId: { type: string, format: uuid }
+              acceptedAt: { type: string, format: date-time }
+    CallHandledElsewhere:
+      name: call.handled_elsewhere
+      title: call.handled_elsewhere
+      summary: Server → Client. Cuộc gọi đến đã được xử lý ở kết nối khác của cùng tài khoản.
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.handled_elsewhere }
+          data:
+            type: object
+            required: [callId, action]
+            properties:
+              callId: { type: string, format: uuid }
+              action:
+                type: string
+                enum: [accepted, rejected]
+    CallEnded:
+      name: call.ended
+      title: call.ended
+      summary: Server → Client. Cuộc gọi đã kết thúc (mọi lý do).
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type: { const: call.ended }
+          data:
+            type: object
+            required: [callId, conversationId, status, endReason, endedAt]
+            properties:
+              callId: { type: string, format: uuid }
+              conversationId: { type: string, format: uuid }
+              status:
+                type: string
+                enum: [ended, missed, rejected, canceled, failed]
+              endReason:
+                type: string
+                enum: [hangup, timeout, rejected, canceled, busy, disconnected, failed, blocked]
+              endedBy:
+                type: string
+                format: uuid
+                nullable: true
+                description: 'Người chủ động kết thúc (`null` nếu do hệ thống, ví dụ timeout hoặc mất kết nối).'
+              durationSeconds:
+                type: integer
+                nullable: true
+                description: Thời lượng đàm thoại, `null` nếu chưa từng được nghe máy.
+              endedAt: { type: string, format: date-time }
+      examples:
+        - summary: Kết thúc bình thường
+          payload:
+            type: call.ended
+            data:
+              callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c11
+              conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+              status: ended
+              endReason: hangup
+              endedBy: 0f9c1a12-7c0d-4b8e-9d6a-3a2a2f5b7e10
+              durationSeconds: 195
+              endedAt: '2026-10-17T01:43:15Z'
+        - summary: Cuộc gọi nhỡ
+          payload:
+            type: call.ended
+            data:
+              callId: 6d0e3a52-2b53-4c0e-b1f3-0d8a2e4e9c12
+              conversationId: 9d3b6f8e-0a55-4f5e-8a53-2f6d3f1c9b77
+              status: missed
+              endReason: timeout
+              endedBy: null
+              durationSeconds: null
+              endedAt: '2026-10-17T02:00:30Z'
+
+  # ---------------------------------------------------------------------
+  schemas:
+    RequestId:
+      type: string
+      format: uuid
+      description: UUID do client sinh để ghép `ack`/`error` với yêu cầu.
+    CallType:
+      type: string
+      enum: [voice, video]
+    CallRef:
+      type: object
+      required: [callId]
+      properties:
+        callId: { type: string, format: uuid }
+    SessionDescription:
+      type: object
+      required: [callId, sdp]
+      properties:
+        callId: { type: string, format: uuid }
+        sdp:
+          type: string
+          maxLength: 32768
+          description: Chuỗi SDP (`RTCSessionDescription.sdp`). Loại (offer/answer) do tên sự kiện quyết định.
+    UserSummary:
+      type: object
+      required: [id, username, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string, format: uri, nullable: true }
+    UserPresence:
+      allOf:
+        - $ref: '#/components/schemas/UserSummary'
+        - type: object
+          required: [isOnline]
+          properties:
+            isOnline: { type: boolean }
+            lastSeenAt: { type: string, format: date-time, nullable: true }
+    FriendRequest:
+      type: object
+      required: [id, sender, receiver, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        sender: { $ref: '#/components/schemas/UserSummary' }
+        receiver: { $ref: '#/components/schemas/UserSummary' }
+        status:
+          type: string
+          enum: [pending, accepted, rejected, canceled]
+        createdAt: { type: string, format: date-time }
+    Attachment:
+      type: object
+      required: [id, kind, fileName, mimeType, sizeBytes, url, urlExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [image, file]
+        fileName: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer, format: int64 }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        url:
+          type: string
+          format: uri
+          description: Presigned URL của MinIO.
+        urlExpiresAt: { type: string, format: date-time }
+    CallSummary:
+      type: object
+      required: [id, callType, status, callerId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        callType: { $ref: '#/components/schemas/CallType' }
+        status:
+          type: string
+          enum: [ringing, ongoing, ended, missed, rejected, canceled, failed]
+        callerId: { type: string, format: uuid }
+        durationSeconds: { type: integer, nullable: true }
+        screenShared: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Message:
+      description: Giống schema `Message` trong `openapi.yaml`.
+      type: object
+      required: [id, conversationId, type, recalled, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        conversationId: { type: string, format: uuid }
+        clientMessageId: { type: string, format: uuid, nullable: true }
+        sender:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserSummary'
+        type:
+          type: string
+          enum: [text, image, file, call]
+        content: { type: string, nullable: true }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        call:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CallSummary'
+        recalled: { type: boolean }
+        recalledAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ConversationBrief:
+      type: object
+      description: Thông tin tóm tắt hội thoại. Để lấy đủ (`unreadCount`, `lastMessage`…) gọi `GET /conversations/{id}`.
+      required: [id, type, memberCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [direct, group]
+        name: { type: string, nullable: true }
+        avatarUrl: { type: string, format: uri, nullable: true }
+        peer:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserPresence'
+        memberCount: { type: integer }
+        createdAt: { type: string, format: date-time }

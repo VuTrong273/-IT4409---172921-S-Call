@@ -1,0 +1,2310 @@
+openapi: 3.0.3
+
+info:
+  title: S-Call REST API
+  version: 1.0.0
+  description: |
+    REST API của **S-Call** - ứng dụng Web nhắn tin và gọi thoại/video thời gian thực
+    (BTL IT4409 - Nhóm 6). REST API xử lý các nghiệp vụ *request/response* (tài khoản, bạn bè,
+    hội thoại, lịch sử tin nhắn, tải tệp, quản trị). Các sự kiện **thời gian thực** (tin nhắn mới,
+    đang gõ phím, online/offline, báo hiệu WebRTC) nằm trong tài liệu `asyncapi.yaml`.
+
+    ## Quy ước chung
+    | Chủ đề | Quy ước |
+    |---|---|
+    | Base URL | `/api/v1` (HTTPS khi triển khai qua Cloudflare Tunnel) |
+    | Định dạng | JSON (`application/json`), riêng upload tệp dùng `multipart/form-data` |
+    | Thời gian | ISO-8601 UTC, ví dụ `2026-10-17T01:30:00Z` |
+    | Tên trường | `camelCase` |
+    | ID | `uuid`, riêng **message ID** là số nguyên `int64` tăng dần (dùng để phân trang & "đã xem") |
+    | Phân trang tin nhắn | Theo **con trỏ** (`before` / `after` + `limit`), mặc định 20 tin |
+    | Phân trang danh sách khác | Theo trang (`page` bắt đầu từ 1, `pageSize` mặc định 20, tối đa 100) |
+
+    ## Xác thực
+    * Đăng nhập trả về **access token (JWT, 15 phút)** và **refresh token (7 ngày, xoay vòng)**.
+    * Gửi access token qua header `Authorization: Bearer <accessToken>`.
+    * Khi access token hết hạn (`401 TOKEN_EXPIRED`) gọi `POST /auth/refresh`.
+    * Tài khoản bị khóa/xóa: mọi token bị thu hồi ngay, API trả `403 ACCOUNT_BANNED` / `401 UNAUTHORIZED`
+      và kết nối WebSocket bị ngắt tức thì.
+    * Mật khẩu băm **bcrypt**; toàn bộ API chạy trên **HTTPS**.
+
+    ## Phân quyền (role)
+    | Role | Quyền |
+    |---|---|
+    | `user` | Mọi chức năng người dùng. Trong nhóm chat, người tạo nhóm có thêm quyền **Trưởng nhóm** (`myRole = group_admin`). |
+    | `admin` | Đăng nhập, đổi mật khẩu, đăng xuất, quản lý Dashboard, người dùng (tìm kiếm, khóa/mở khóa, xóa) |
+    | `super_admin` | Chỉ có thể đăng nhập và đăng xuất, tạo/xóa Admin, đổi mật khẩu Admin không cần OTP, xem nhật ký thao tác. Mỗi lần đăng nhập hệ thống gửi email cảnh báo. |
+
+    Mỗi operation quản trị có extension `x-roles` ghi role tối thiểu.
+
+    ## Khóa cuộc trò chuyện bằng mã PIN
+    Thành viên có thể đặt PIN 4 chữ số cho một cuộc trò chuyện (PIN là riêng của từng người).
+    1. Hội thoại đã khóa có `isLocked = true` và `lastMessage = null` trong danh sách hội thoại.
+    2. Client gọi `POST /conversations/{id}/pin/verify` → nhận `unlockToken` (JWT sống 15 phút, gắn với 1 hội thoại).
+    3. Các API đọc/gửi/thu hồi tin nhắn và tải tệp của hội thoại đó **bắt buộc** header
+       `X-Conversation-Unlock-Token`, nếu thiếu/hết hạn → `423 CONVERSATION_LOCKED`.
+    4. Nhập sai PIN 5 lần liên tiếp → khóa thử PIN 5 phút (`429 PIN_TEMPORARILY_LOCKED`). PIN được băm bcrypt.
+
+    ## Giới hạn tốc độ (rate limit)
+    Các API nhạy cảm (`login`, `forgot-password`, `reset-password`, `pin/verify`) có giới hạn theo IP/tài khoản.
+    Vượt ngưỡng trả `429 RATE_LIMITED` kèm header `Retry-After` (giây).
+
+    ## Tệp đính kèm
+    Tệp lưu trong **MinIO**. Tối đa **20 MB/tệp**. Ảnh đại diện lưu ở bucket công khai (URL ổn định);
+    tệp trong chat lưu ở bucket riêng tư và được trả về dưới dạng **presigned URL** có thời hạn
+    (`url` + `urlExpiresAt`), nên thẻ `<img src>` dùng trực tiếp được; hết hạn thì gọi `GET /attachments/{id}/url`.
+
+  contact:
+    name: Nhóm 6 - IT4409
+  license:
+    name: Academic use only
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Môi trường phát triển (Docker Compose)
+  - url: https://{domain}/api/v1
+    description: Triển khai công khai qua Cloudflare Tunnel
+    variables:
+      domain:
+        default: scall.example.com
+
+tags:
+  - name: Health
+    description: Kiểm tra tình trạng dịch vụ
+  - name: Auth
+    description: Đăng ký, đăng nhập, quên mật khẩu, làm mới token
+  - name: Users
+    description: Hồ sơ cá nhân, tìm kiếm người dùng
+  - name: Friends
+    description: Lời mời kết bạn, danh sách bạn bè (kèm trạng thái online)
+  - name: Blocks
+    description: Chặn / bỏ chặn người dùng
+  - name: Conversations
+    description: Hội thoại 1-1 và nhóm, thành viên, mã PIN khóa trò chuyện
+  - name: Messages
+    description: Lịch sử, gửi, tìm kiếm, thu hồi, đánh dấu đã xem
+  - name: Attachments
+    description: Tải lên / tải xuống hình ảnh và tệp đính kèm
+  - name: Calls
+    description: Cấu hình ICE (STUN/TURN) và lịch sử cuộc gọi. Báo hiệu WebRTC nằm trong asyncapi.yaml
+  - name: Admin
+    description: Quản trị hệ thống (Admin / Super Admin)
+  - name: Dev
+    description: Chỉ có khi `APP_ENV=development` – xem email OTP/cảnh báo ngay trên màn hình
+
+security:
+  - bearerAuth: []
+
+paths:
+  # =====================================================================
+  # HEALTH
+  # =====================================================================
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Kiểm tra tình trạng dịch vụ
+      description: Dùng cho `healthcheck` của Docker Compose. Không cần xác thực.
+      security: []
+      responses:
+        '200':
+          description: Dịch vụ hoạt động bình thường
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, example: ok }
+                  database: { type: string, example: up }
+                  storage: { type: string, example: up }
+        '503':
+          description: Một phụ thuộc (PostgreSQL / MinIO) không khả dụng
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: degraded }
+                  database: { type: string, example: down }
+                  storage: { type: string, example: up }
+
+  # =====================================================================
+  # AUTH
+  # =====================================================================
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Đăng ký tài khoản mới
+      description: |
+        Tạo tài khoản role `user`. Thành công sẽ **đăng nhập luôn** và trả về cặp token.
+        Email và username **không phân biệt hoa/thường** và là duy nhất.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Đăng ký thành công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409':
+          description: Email hoặc username đã tồn tại (`EMAIL_TAKEN` / `USERNAME_TAKEN`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: EMAIL_TAKEN, message: Email đã được sử dụng }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Đăng nhập bằng Username/Email và mật khẩu
+      description: |
+        * `identifier` là Email **hoặc** Username.
+        * Tài khoản `banned` → `403 ACCOUNT_BANNED`; tài khoản `deleted` hoặc sai thông tin → `401 INVALID_CREDENTIALS`
+          (không tiết lộ tài khoản có tồn tại hay không).
+        * Tài khoản `deactivated` (tự vô hiệu hóa) sẽ được **kích hoạt lại** khi đăng nhập thành công.
+        * Nếu là `super_admin`, hệ thống ghi nhật ký `auth.super_admin_login` và gửi email cảnh báo đăng nhập
+          (môi trường dev xem qua `GET /dev/emails`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401':
+          description: Sai thông tin đăng nhập (`INVALID_CREDENTIALS`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: INVALID_CREDENTIALS, message: Tên đăng nhập/email hoặc mật khẩu không đúng }
+        '403':
+          description: Tài khoản bị khóa (`ACCOUNT_BANNED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: ACCOUNT_BANNED, message: Tài khoản của bạn đã bị khóa }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Làm mới access token
+      description: |
+        Dùng refresh token để lấy cặp token mới (**xoay vòng**: refresh token cũ bị thu hồi).
+        Nếu một refresh token đã bị thu hồi được gửi lại, toàn bộ session của người dùng bị thu hồi
+        (phát hiện bị đánh cắp token).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Cặp token mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Tài khoản bị khóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Đăng xuất
+      description: Thu hồi refresh token (session) hiện tại. Kết nối WebSocket của session đó bị ngắt.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Bỏ trống để thu hồi session gắn với access token hiện tại.
+                allDevices:
+                  type: boolean
+                  default: false
+                  description: "`true` để đăng xuất khỏi mọi thiết bị."
+      responses:
+        '204': { description: Đã đăng xuất }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      operationId: forgotPassword
+      summary: Yêu cầu mã OTP đặt lại mật khẩu
+      description: |
+        Nhập Username hoặc Email, hệ thống gửi **OTP 6 chữ số** (hiệu lực 10 phút, sai tối đa 5 lần) qua email.
+        Để tránh dò tài khoản, API **luôn trả 200** dù tài khoản có tồn tại hay không.
+        Ở môi trường dev (`APP_ENV=development`) OTP được trả thêm trong `debugOtp` để hiển thị trên màn hình.
+        Super Admin không được phép chọn quên mật khẩu.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier]
+              properties:
+                identifier:
+                  type: string
+                  description: Email hoặc Username
+                  example: alice@example.com
+      responses:
+        '200':
+          description: Yêu cầu đã được ghi nhận
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+                    example: Nếu tài khoản tồn tại, mã OTP đã được gửi đến email.
+                  debugOtp:
+                    type: string
+                    pattern: '^\d{6}$'
+                    description: Chỉ xuất hiện ở môi trường dev.
+                    example: '482913'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Đặt lại mật khẩu bằng OTP
+      description: Thành công sẽ thu hồi toàn bộ session hiện có của tài khoản. Super Admin không được phép đổi mật khẩu.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '204': { description: Đổi mật khẩu thành công }
+        '400':
+          description: Dữ liệu sai hoặc OTP không hợp lệ/hết hạn (`VALIDATION_ERROR` / `INVALID_OTP`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: INVALID_OTP, message: Mã OTP không đúng hoặc đã hết hạn }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/ws-ticket:
+    post:
+      tags: [Auth]
+      operationId: createWebSocketTicket
+      summary: Lấy ticket để mở kết nối WebSocket
+      description: |
+        Trình duyệt không thể gửi header `Authorization` khi mở WebSocket, nên client xin một **ticket**
+        sống rất ngắn (60 giây, dùng một lần) rồi kết nối `wss://<host>/ws?ticket=<ticket>`.
+        Chi tiết giao thức xem `asyncapi.yaml`.
+      responses:
+        '200':
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, expiresIn, url]
+                properties:
+                  ticket: { type: string }
+                  expiresIn: { type: integer, example: 60, description: Giây }
+                  url:
+                    type: string
+                    format: uri
+                    example: wss://scall.example.com/ws
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =====================================================================
+  # USERS
+  # =====================================================================
+  /users/me:
+    get:
+      tags: [Users]
+      operationId: getMe
+      summary: Xem hồ sơ của tôi
+      responses:
+        '200':
+          description: Hồ sơ cá nhân
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Users]
+      operationId: updateMe
+      summary: Cập nhật họ tên hiển thị và giới thiệu ngắn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 100 }
+                bio: { type: string, maxLength: 255, nullable: true }
+      responses:
+        '200':
+          description: Hồ sơ sau khi cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfile' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/me/avatar:
+    put:
+      tags: [Users]
+      operationId: uploadMyAvatar
+      summary: Tải lên ảnh đại diện
+      description: Ảnh `jpeg`/`png`/`webp`, tối đa 5 MB. Lưu vào MinIO (bucket `avatars`).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Hồ sơ với `avatarUrl` mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfile' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+    delete:
+      tags: [Users]
+      operationId: deleteMyAvatar
+      summary: Xóa ảnh đại diện (về ảnh mặc định)
+      responses:
+        '204': { description: Đã xóa }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/me/password:
+    patch:
+      tags: [Users]
+      operationId: changeMyPassword
+      summary: Đổi mật khẩu
+      description: Thành công sẽ thu hồi mọi session khác của tài khoản (giữ lại session hiện tại).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Đã đổi mật khẩu }
+        '400':
+          description: Dữ liệu không hợp lệ hoặc mật khẩu hiện tại sai
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/me/deactivate:
+    post:
+      tags: [Users]
+      operationId: deactivateMyAccount
+      summary: Tự vô hiệu hóa tài khoản
+      description: |
+        Đặt `status = deactivated`, thu hồi mọi session và ngắt WebSocket. Người dùng hiển thị như *offline*.
+        Đăng nhập lại sẽ kích hoạt lại tài khoản. Không áp dụng cho `admin`/`super_admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, format: password }
+      responses:
+        '204': { description: Đã vô hiệu hóa tài khoản }
+        '400':
+          description: Mật khẩu xác nhận sai
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/search:
+    get:
+      tags: [Users]
+      operationId: searchUsers
+      summary: Tìm người dùng theo Email hoặc Username
+      description: |
+        * Nếu `q` chứa `@` → khớp **chính xác** Email.
+        * Ngược lại → khớp Username **chính xác hoặc theo tiền tố**.
+        * Tối đa 20 kết quả. Loại trừ bản thân, tài khoản bị khóa/đã xóa/vô hiệu hóa và những người đã chặn bạn.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 100 }
+          example: alice
+      responses:
+        '200':
+          description: Kết quả tìm kiếm
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicUser' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/{userId}:
+    get:
+      tags: [Users]
+      operationId: getUserById
+      summary: Xem hồ sơ công khai của một người dùng
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Hồ sơ công khai
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # =====================================================================
+  # FRIENDS
+  # =====================================================================
+  /friends:
+    get:
+      tags: [Friends]
+      operationId: listFriends
+      summary: Danh sách bạn bè kèm trạng thái hoạt động
+      description: |
+        Mỗi bạn có `isOnline` (đang có kết nối WebSocket) hoặc `lastSeenAt` (lần truy cập cuối).
+        Thay đổi trạng thái theo thời gian thực nhận qua sự kiện WebSocket `presence.updated`.
+      parameters:
+        - name: q
+          in: query
+          description: Lọc theo tên hiển thị / username
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách bạn bè
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Friend' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /friends/{userId}:
+    delete:
+      tags: [Friends]
+      operationId: removeFriend
+      summary: Hủy kết bạn
+      description: Xóa quan hệ bạn bè. Hội thoại 1-1 và lịch sử tin nhắn được giữ nguyên.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Đã hủy kết bạn }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /friend-requests:
+    get:
+      tags: [Friends]
+      operationId: listFriendRequests
+      summary: Danh sách lời mời kết bạn đang chờ
+      parameters:
+        - name: direction
+          in: query
+          description: "`incoming` = lời mời tôi nhận được, `outgoing` = lời mời tôi đã gửi"
+          schema:
+            type: string
+            enum: [incoming, outgoing]
+            default: incoming
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách lời mời (chỉ trạng thái `pending`)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/FriendRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Friends]
+      operationId: sendFriendRequest
+      summary: Gửi lời mời kết bạn
+      description: |
+        Lỗi nghiệp vụ:
+        * `409 ALREADY_FRIENDS` - đã là bạn bè.
+        * `409 REQUEST_ALREADY_EXISTS` - đã có lời mời đang chờ giữa hai người (kể cả chiều ngược lại).
+        * `403 USER_BLOCKED` - một trong hai bên đã chặn bên kia.
+        * `400 VALIDATION_ERROR` - tự gửi cho chính mình.
+
+        Người nhận được thông báo realtime `friend.request.received`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiverId]
+              properties:
+                receiverId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Đã gửi lời mời
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FriendRequest' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /friend-requests/{requestId}:
+    delete:
+      tags: [Friends]
+      operationId: cancelFriendRequest
+      summary: Hủy lời mời đã gửi
+      description: Chỉ người gửi, khi lời mời còn `pending`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204': { description: Đã hủy lời mời }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /friend-requests/{requestId}/accept:
+    post:
+      tags: [Friends]
+      operationId: acceptFriendRequest
+      summary: Chấp nhận lời mời kết bạn
+      description: |
+        Chỉ người nhận. Tạo quan hệ bạn bè và (nếu chưa có) hội thoại 1-1. Người gửi nhận sự kiện
+        `friend.request.accepted`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Kết quả chấp nhận, kèm hội thoại 1-1 giữa hai người
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [friend, conversationId]
+                properties:
+                  friend: { $ref: '#/components/schemas/Friend' }
+                  conversationId: { type: string, format: uuid }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /friend-requests/{requestId}/reject:
+    post:
+      tags: [Friends]
+      operationId: rejectFriendRequest
+      summary: Từ chối lời mời kết bạn
+      description: Chỉ người nhận. Người gửi **không** được thông báo.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204': { description: Đã từ chối }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # =====================================================================
+  # BLOCKS
+  # =====================================================================
+  /blocks:
+    get:
+      tags: [Blocks]
+      operationId: listBlockedUsers
+      summary: Danh sách người dùng tôi đã chặn
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách đã chặn
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          required: [user, blockedAt]
+                          properties:
+                            user: { $ref: '#/components/schemas/UserSummary' }
+                            blockedAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /blocks/{userId}:
+    put:
+      tags: [Blocks]
+      operationId: blockUser
+      summary: Chặn người dùng
+      description: |
+        Idempotent. Khi chặn: hủy kết bạn (nếu có), hủy các lời mời đang chờ giữa hai người.
+        Người bị chặn **không thể** gửi tin nhắn / gọi cho bạn (`403 USER_BLOCKED`) và không tìm thấy bạn.
+        Hội thoại 1-1 cũ vẫn tồn tại ở phía bạn để xem lại.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Đã chặn }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Blocks]
+      operationId: unblockUser
+      summary: Bỏ chặn người dùng
+      description: Bỏ chặn **không** khôi phục quan hệ bạn bè.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Đã bỏ chặn }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # =====================================================================
+  # CONVERSATIONS
+  # =====================================================================
+  /conversations:
+    get:
+      tags: [Conversations]
+      operationId: listConversations
+      summary: Danh sách hội thoại của tôi
+      description: |
+        Sắp xếp theo tin nhắn mới nhất. Mỗi hội thoại có `unreadCount` và `lastMessage`.
+        Hội thoại đã khóa PIN: `isLocked = true`, `lastMessage = null`, `unreadCount` vẫn được trả.
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/ConversationType' }
+        - name: q
+          in: query
+          description: Lọc theo tên nhóm / tên người đối thoại
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách hội thoại
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Conversations]
+      operationId: createConversation
+      summary: Mở chat 1-1 hoặc tạo nhóm chat
+      description: |
+        * `type = direct`: yêu cầu đã là bạn bè và không bên nào chặn bên kia. Nếu hội thoại đã tồn tại,
+          trả `200` với hội thoại hiện có (idempotent).
+        * `type = group`: `name` và `memberIds` (**tối thiểu 2 người khác**, đều phải là bạn của người tạo,
+          tối đa 100) là bắt buộc. Người tạo trở thành **Trưởng nhóm**.
+
+        Các thành viên nhận sự kiện `conversation.created`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CreateDirectConversationRequest'
+                - $ref: '#/components/schemas/CreateGroupConversationRequest'
+              discriminator:
+                propertyName: type
+                mapping:
+                  direct: '#/components/schemas/CreateDirectConversationRequest'
+                  group: '#/components/schemas/CreateGroupConversationRequest'
+      responses:
+        '200':
+          description: Hội thoại 1-1 đã tồn tại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '201':
+          description: Đã tạo hội thoại mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Không phải bạn bè hoặc bị chặn (`FORBIDDEN` / `USER_BLOCKED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /conversations/{conversationId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      tags: [Conversations]
+      operationId: getConversation
+      summary: Chi tiết hội thoại
+      responses:
+        '200':
+          description: Hội thoại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Conversations]
+      operationId: updateGroup
+      summary: Đổi tên nhóm
+      description: Chỉ **Trưởng nhóm**. Áp dụng cho hội thoại `group`. Thành viên nhận `conversation.updated`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '200':
+          description: Hội thoại sau khi cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /conversations/{conversationId}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    put:
+      tags: [Conversations]
+      operationId: uploadGroupAvatar
+      summary: Đặt ảnh đại diện nhóm
+      description: Chỉ **Trưởng nhóm**. Ảnh `jpeg`/`png`/`webp`, tối đa 5 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Hội thoại với `avatarUrl` mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+
+  /conversations/{conversationId}/members:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      tags: [Conversations]
+      operationId: listMembers
+      summary: Danh sách thành viên hiện tại
+      responses:
+        '200':
+          description: Thành viên của hội thoại
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConversationMember' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Conversations]
+      operationId: addMembers
+      summary: Thêm thành viên vào nhóm
+      description: |
+        Chỉ **Trưởng nhóm**; người được thêm phải là bạn của Trưởng nhóm; nhóm tối đa 100 thành viên.
+        Thành viên mới chỉ xem được tin nhắn từ thời điểm tham gia.
+        Sự kiện: `conversation.member.added` (cho cả nhóm) và `conversation.created` (cho người mới).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userIds]
+              properties:
+                userIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách thành viên sau khi thêm
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConversationMember' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /conversations/{conversationId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [Conversations]
+      operationId: removeMember
+      summary: Xóa thành viên khỏi nhóm / rời nhóm
+      description: |
+        * **Trưởng nhóm** xóa người khác khỏi nhóm.
+        * Bất kỳ thành viên có thể tự rời nhóm (`userId` = ID của chính mình). Nếu Trưởng nhóm rời đi,
+          thành viên tham gia sớm nhất được nâng làm Trưởng nhóm. Nhóm không còn ai thì bị xóa.
+        * Không áp dụng cho hội thoại `direct`.
+
+        Sự kiện: `conversation.member.removed`.
+      responses:
+        '204': { description: Đã xóa / đã rời nhóm }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /conversations/{conversationId}/pin:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    put:
+      tags: [Conversations]
+      operationId: setConversationPin
+      summary: Đặt hoặc đổi mã PIN khóa cuộc trò chuyện
+      description: |
+        Đặt PIN 4 chữ số cho riêng tài khoản của bạn trong hội thoại này.
+        Nếu đã có PIN, bắt buộc truyền `currentPin` để đổi.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin: { $ref: '#/components/schemas/Pin' }
+                currentPin:
+                  $ref: '#/components/schemas/Pin'
+      responses:
+        '204': { description: Đã đặt PIN }
+        '400':
+          description: PIN không hợp lệ hoặc `currentPin` sai (`VALIDATION_ERROR` / `INVALID_PIN`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: PIN bị khóa tạm thời (`PIN_TEMPORARILY_LOCKED`)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /conversations/{conversationId}/pin/verify:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      tags: [Conversations]
+      operationId: verifyConversationPin
+      summary: Nhập PIN để mở khóa cuộc trò chuyện
+      description: |
+        Trả `unlockToken` (JWT 15 phút, chỉ có hiệu lực cho hội thoại này) để gửi qua header
+        `X-Conversation-Unlock-Token`. Cũng dùng token này trong sự kiện WebSocket `conversation.unlock`.
+        Sai 5 lần liên tiếp → khóa thử 5 phút.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin: { $ref: '#/components/schemas/Pin' }
+      responses:
+        '200':
+          description: PIN đúng
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unlockToken, expiresAt]
+                properties:
+                  unlockToken: { type: string }
+                  expiresAt: { type: string, format: date-time }
+        '400':
+          description: Hội thoại chưa đặt PIN (`VALIDATION_ERROR`) hoặc PIN sai (`INVALID_PIN`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                code: INVALID_PIN
+                message: Mã PIN không đúng
+                details: [{ field: attemptsRemaining, message: '3' }]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: PIN bị khóa tạm thời (`PIN_TEMPORARILY_LOCKED`)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /conversations/{conversationId}/pin/disable:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      tags: [Conversations]
+      operationId: disableConversationPin
+      summary: Tắt khóa cuộc trò chuyện
+      description: |
+        Xác nhận bằng **một trong hai**: `pin` hiện tại, hoặc `password` tài khoản (trường hợp quên PIN).
+        Nhập sai tính vào bộ đếm sai PIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                pin: { $ref: '#/components/schemas/Pin' }
+                password: { type: string, format: password }
+      responses:
+        '204': { description: Đã tắt khóa }
+        '400':
+          description: Xác nhận sai (`INVALID_PIN` / `INVALID_CREDENTIALS`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: PIN bị khóa tạm thời
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # =====================================================================
+  # MESSAGES
+  # =====================================================================
+  /conversations/{conversationId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UnlockToken'
+    get:
+      tags: [Messages]
+      operationId: listMessages
+      summary: Tải lịch sử tin nhắn (phân trang theo con trỏ)
+      description: |
+        * Không truyền `before`/`after`: trả `limit` (mặc định **20**) tin **mới nhất**.
+        * `before=<messageId>`: tin cũ hơn (cuộn lên để tải tiếp).
+        * `after=<messageId>`: tin mới hơn (đồng bộ lại sau khi mất kết nối WebSocket).
+        * Kết quả sắp xếp **mới → cũ** (`id` giảm dần), kể cả khi dùng `after`.
+        * Tin đã thu hồi vẫn xuất hiện với `recalled = true`, `content = null`, `attachments = []`.
+        * Tin nhắn hệ thống cuộc gọi có `type = call` kèm đối tượng `call`.
+        * Hội thoại đã khóa PIN yêu cầu header `X-Conversation-Unlock-Token` (`423` nếu thiếu).
+      parameters:
+        - name: before
+          in: query
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: after
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - $ref: '#/components/parameters/MessageLimit'
+      responses:
+        '200':
+          description: Một trang tin nhắn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+    post:
+      tags: [Messages]
+      operationId: sendMessage
+      summary: Gửi tin nhắn (REST, dự phòng cho WebSocket)
+      description: |
+        Hiệu quả tương đương sự kiện WebSocket `message.send`; thành viên khác nhận `message.new` thời gian thực.
+        * `type = text`: bắt buộc `content` (1 - 5000 ký tự).
+        * `type = image | file`: bắt buộc `attachmentIds` (tệp đã tải lên qua `POST .../attachments`
+          trong cùng hội thoại, chưa gắn tin nhắn nào; tối đa 10 tệp; `image` chỉ chấp nhận tệp `kind = image`).
+          `content` là chú thích tùy chọn.
+        * `clientMessageId` chống gửi trùng: gửi lại cùng giá trị sẽ nhận `200` với tin nhắn đã lưu, không tạo mới.
+        * Hội thoại 1-1 mà một bên đã chặn bên kia → `403 USER_BLOCKED`. Bạn không còn là thành viên nhóm → `403`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+            examples:
+              text:
+                summary: Tin nhắn văn bản
+                value:
+                  clientMessageId: 7b0c1f0e-6c1a-4d56-8c2b-0c9d1b6f6a11
+                  type: text
+                  content: Chào bạn!
+              image:
+                summary: Tin nhắn hình ảnh
+                value:
+                  clientMessageId: 1f4f7a4e-91d4-44a6-a3a9-3d3d2a0f4c22
+                  type: image
+                  attachmentIds: [3fa85f64-5717-4562-b3fc-2c963f66afa6]
+      responses:
+        '200':
+          description: Tin nhắn đã tồn tại (trùng `clientMessageId`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '201':
+          description: Đã gửi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  /conversations/{conversationId}/messages/search:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UnlockToken'
+    get:
+      tags: [Messages]
+      operationId: searchMessages
+      summary: Tìm tin nhắn theo từ khóa trong cuộc trò chuyện
+      description: |
+        Khớp chuỗi con, **không phân biệt hoa/thường** (`ILIKE '%q%'`, có chỉ mục trigram), chỉ trong tin
+        còn hiệu lực (loại tin đã thu hồi). Kết quả sắp xếp mới → cũ, phân trang theo `before`.
+        Hội thoại đã khóa PIN yêu cầu header `X-Conversation-Unlock-Token`.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 100 }
+          example: báo cáo
+        - name: before
+          in: query
+          schema: { type: integer, format: int64, minimum: 1 }
+        - $ref: '#/components/parameters/MessageLimit'
+      responses:
+        '200':
+          description: Tin nhắn khớp từ khóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  /conversations/{conversationId}/read:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UnlockToken'
+    post:
+      tags: [Messages]
+      operationId: markConversationRead
+      summary: Đánh dấu đã xem đến một tin nhắn
+      description: |
+        Đặt con trỏ `lastReadMessageId` (chỉ tăng, không giảm). Các thành viên khác nhận sự kiện
+        `conversation.read` để hiển thị "Đã xem". Tương đương sự kiện WebSocket `message.read`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lastReadMessageId]
+              properties:
+                lastReadMessageId: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '204': { description: Đã ghi nhận }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  /messages/{messageId}/recall:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+      - $ref: '#/components/parameters/UnlockToken'
+    post:
+      tags: [Messages]
+      operationId: recallMessage
+      summary: Thu hồi tin nhắn đã gửi
+      description: |
+        Chỉ **người gửi** mới được thu hồi tin của mình (không giới hạn thời gian). Nội dung bị xóa,
+        tệp đính kèm bị xóa khỏi MinIO. Tin nhắn hệ thống `call` không thể thu hồi.
+        Mọi thành viên nhận sự kiện `message.recalled`.
+        Hội thoại đã khóa PIN yêu cầu header `X-Conversation-Unlock-Token`.
+      responses:
+        '200':
+          description: Tin nhắn sau khi thu hồi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  # =====================================================================
+  # ATTACHMENTS
+  # =====================================================================
+  /conversations/{conversationId}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UnlockToken'
+    post:
+      tags: [Attachments]
+      operationId: uploadAttachment
+      summary: Tải lên hình ảnh / tệp đính kèm
+      description: |
+        Tải **một** tệp mỗi lần (gọi nhiều lần để gửi nhiều tệp), tối đa **20 MB**. Server kiểm tra MIME bằng
+        nội dung thực (magic bytes), không chỉ dựa vào phần mở rộng.
+
+        Loại được phép:
+        * Hình ảnh (`kind = image`): `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+        * Tệp (`kind = file`): `.pdf`, `.doc/.docx`, `.xls/.xlsx`, `.ppt/.pptx`, `.txt`, `.csv`, `.zip`, `.rar`, `.7z`
+
+        Tệp ở trạng thái "chờ" cho đến khi được gắn vào tin nhắn qua `attachmentIds`; tệp chưa gắn quá
+        24 giờ bị dọn dẹp tự động.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Đã tải lên
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  /attachments/{attachmentId}/url:
+    parameters:
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/UnlockToken'
+    get:
+      tags: [Attachments]
+      operationId: getAttachmentUrl
+      summary: Lấy lại URL tải xuống (presigned) của tệp
+      description: |
+        Dùng khi `urlExpiresAt` đã qua. Chỉ thành viên hiện tại của hội thoại mới lấy được.
+        Với `disposition = attachment` URL kèm `Content-Disposition: attachment` (nút "Tải về"),
+        với `inline` trình duyệt hiển thị trực tiếp (ảnh).
+      parameters:
+        - name: disposition
+          in: query
+          schema:
+            type: string
+            enum: [inline, attachment]
+            default: inline
+      responses:
+        '200':
+          description: URL mới
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, urlExpiresAt]
+                properties:
+                  url: { type: string, format: uri }
+                  urlExpiresAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  # =====================================================================
+  # CALLS
+  # =====================================================================
+  /calls/ice-servers:
+    get:
+      tags: [Calls]
+      operationId: getIceServers
+      summary: Lấy cấu hình STUN/TURN cho WebRTC
+      description: |
+        Trả danh sách `iceServers` để truyền vào `new RTCPeerConnection({ iceServers })`.
+        Với TURN (Coturn / Metered.ca) server cấp **credential tạm thời** (TURN REST API, HMAC) có hiệu lực
+        `ttlSeconds`, không lộ khóa dài hạn ra trình duyệt. Gọi trước mỗi cuộc gọi.
+      responses:
+        '200':
+          description: Cấu hình ICE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IceServersResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /calls/{callId}:
+    get:
+      tags: [Calls]
+      operationId: getCall
+      summary: Chi tiết một cuộc gọi
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Cuộc gọi (chỉ caller/callee mới xem được)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Call' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /conversations/{conversationId}/calls:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/UnlockToken'
+    get:
+      tags: [Calls]
+      operationId: listConversationCalls
+      summary: Lịch sử cuộc gọi trong hội thoại 1-1
+      description: Sắp xếp mới → cũ. Mỗi cuộc gọi kết thúc cũng xuất hiện trong khung chat dưới dạng tin nhắn `type = call`.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Lịch sử cuộc gọi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Call' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  # =====================================================================
+  # ADMIN
+  # =====================================================================
+  /admin/stats:
+    get:
+      tags: [Admin]
+      operationId: getAdminStats
+      summary: Dashboard thống kê tổng quan
+      x-roles: [admin, super_admin]
+      responses:
+        '200':
+          description: Số liệu tổng quan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminStats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      operationId: adminListUsers
+      summary: Tìm kiếm và liệt kê người dùng
+      x-roles: [admin, super_admin]
+      parameters:
+        - name: q
+          in: query
+          description: Tìm theo Username / Email / Họ tên (chuỗi con, không phân biệt hoa thường)
+          schema: { type: string }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/UserRole' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/UserStatus' }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, -createdAt, username, -username, lastSeenAt, -lastSeenAt]
+            default: -createdAt
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách người dùng
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Admin]
+      operationId: adminGetUser
+      summary: Xem thông tin và trạng thái người dùng
+      x-roles: [admin, super_admin]
+      responses:
+        '200':
+          description: Thông tin chi tiết
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Admin]
+      operationId: adminDeleteUser
+      summary: Xóa tài khoản người dùng (xóa mềm + ẩn danh hóa)
+      description: |
+        Chỉ áp dụng cho role `user` (xóa Admin dùng `DELETE /admin/admins/{userId}`).
+        `status = deleted`; email/username/họ tên/ảnh/giới thiệu bị ẩn danh hóa, mật khẩu bị vô hiệu,
+        mọi session bị thu hồi và WebSocket bị ngắt. Tin nhắn cũ được giữ lại và hiển thị "Người dùng đã xóa".
+        Ghi nhật ký `user.delete`.
+      x-roles: [admin, super_admin]
+      responses:
+        '204': { description: Đã xóa tài khoản }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/users/{userId}/ban:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Admin]
+      operationId: adminBanUser
+      summary: Khóa tài khoản vi phạm
+      description: |
+        Chỉ áp dụng cho role `user`. Tài khoản bị khóa **không thể đăng nhập**, mọi token bị thu hồi và
+        kết nối WebSocket bị **ngắt ngay lập tức** (sự kiện `session.terminated`). Ghi nhật ký `user.ban`.
+      x-roles: [admin, super_admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500, example: Spam tin nhắn }
+      responses:
+        '200':
+          description: Tài khoản sau khi khóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/users/{userId}/unban:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Admin]
+      operationId: adminUnbanUser
+      summary: Mở khóa tài khoản
+      description: Đặt lại `status = active`. Ghi nhật ký `user.unban`.
+      x-roles: [admin, super_admin]
+      responses:
+        '200':
+          description: Tài khoản sau khi mở khóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/admins:
+    post:
+      tags: [Admin]
+      operationId: superAdminCreateAdmin
+      summary: Tạo tài khoản Admin
+      description: Chỉ Super Admin. Ghi nhật ký `admin.create`.
+      x-roles: [super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Admin mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUser' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Email hoặc username đã tồn tại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /admin/admins/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      tags: [Admin]
+      operationId: superAdminDeleteAdmin
+      summary: Xóa tài khoản Admin
+      description: Chỉ Super Admin, chỉ áp dụng cho role `admin`. Ghi nhật ký `admin.delete`.
+      x-roles: [super_admin]
+      responses:
+        '204': { description: Đã xóa Admin }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/admins/{userId}/password:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Admin]
+      operationId: superAdminResetAdminPassword
+      summary: Đổi mật khẩu Admin (không cần OTP)
+      description: Chỉ Super Admin. Thu hồi mọi session của Admin đó. Ghi nhật ký `admin.password_reset`.
+      x-roles: [super_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword: { $ref: '#/components/schemas/Password' }
+      responses:
+        '204': { description: Đã đổi mật khẩu }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/audit-logs:
+    get:
+      tags: [Admin]
+      operationId: superAdminListAuditLogs
+      summary: Nhật ký thao tác quản trị
+      x-roles: [super_admin]
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [user.ban, user.unban, user.delete, admin.create, admin.delete, admin.password_reset, auth.super_admin_login]
+        - name: actorId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Nhật ký (mới → cũ)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuditLog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =====================================================================
+  # DEV
+  # =====================================================================
+  /dev/emails:
+    get:
+      tags: [Dev]
+      operationId: devListEmails
+      summary: Xem hộp thư giả lập (OTP, cảnh báo Super Admin)
+      description: |
+        Chỉ có khi `APP_ENV=development`, các môi trường khác trả `404`. Đọc từ bảng `email_outbox`.
+        Dùng để demo OTP / email cảnh báo trên màn hình mà không cần SMTP thật.
+      security: []
+      parameters:
+        - name: to
+          in: query
+          description: Lọc theo email người nhận
+          schema: { type: string, format: email }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Email mới nhất
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DevEmail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token JWT từ `/auth/login` hoặc `/auth/register`.
+
+  # ---------------------------------------------------------------------
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    MessageLimit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+    UnlockToken:
+      name: X-Conversation-Unlock-Token
+      in: header
+      required: false
+      description: |
+        Token nhận từ `POST /conversations/{id}/pin/verify`. **Bắt buộc** nếu bạn đã đặt PIN cho hội thoại này.
+      schema: { type: string }
+
+  # ---------------------------------------------------------------------
+  responses:
+    ValidationError:
+      description: Dữ liệu không hợp lệ (`VALIDATION_ERROR`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            code: VALIDATION_ERROR
+            message: Dữ liệu không hợp lệ
+            details:
+              - { field: email, message: Email không đúng định dạng }
+    Unauthorized:
+      description: Chưa đăng nhập, token sai hoặc hết hạn (`UNAUTHORIZED` / `TOKEN_EXPIRED`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: TOKEN_EXPIRED, message: Access token đã hết hạn }
+    Forbidden:
+      description: Không đủ quyền hoặc hành động bị cấm (`FORBIDDEN` / `USER_BLOCKED` / `ACCOUNT_BANNED`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: FORBIDDEN, message: Bạn không có quyền thực hiện thao tác này }
+    NotFound:
+      description: Không tìm thấy tài nguyên (hoặc bạn không có quyền biết nó tồn tại) (`NOT_FOUND`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: NOT_FOUND, message: Không tìm thấy tài nguyên }
+    Conflict:
+      description: Xung đột trạng thái (`ALREADY_FRIENDS`, `REQUEST_ALREADY_EXISTS`, `INVALID_STATE`, ...)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: ALREADY_FRIENDS, message: Hai bạn đã là bạn bè }
+    Locked:
+      description: Hội thoại đang khóa bằng PIN, thiếu hoặc hết hạn `X-Conversation-Unlock-Token` (`CONVERSATION_LOCKED`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: CONVERSATION_LOCKED, message: Cuộc trò chuyện đang được khóa bằng mã PIN }
+    PayloadTooLarge:
+      description: Tệp vượt quá giới hạn (`FILE_TOO_LARGE`, tối đa 20 MB; ảnh đại diện 5 MB)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: FILE_TOO_LARGE, message: Tệp vượt quá dung lượng tối đa 20 MB }
+    UnsupportedMediaType:
+      description: Loại tệp không được hỗ trợ (`UNSUPPORTED_FILE_TYPE`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: UNSUPPORTED_FILE_TYPE, message: Loại tệp không được hỗ trợ }
+    TooManyRequests:
+      description: Vượt giới hạn tốc độ (`RATE_LIMITED`)
+      headers:
+        Retry-After:
+          description: Số giây cần chờ trước khi thử lại
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: RATE_LIMITED, message: 'Bạn thao tác quá nhanh, vui lòng thử lại sau' }
+
+  # ---------------------------------------------------------------------
+  schemas:
+    # ----- Chung -----
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Mã lỗi máy đọc được, ổn định để client xử lý.
+          enum:
+            - VALIDATION_ERROR
+            - UNAUTHORIZED
+            - TOKEN_EXPIRED
+            - INVALID_CREDENTIALS
+            - ACCOUNT_BANNED
+            - FORBIDDEN
+            - NOT_FOUND
+            - EMAIL_TAKEN
+            - USERNAME_TAKEN
+            - ALREADY_FRIENDS
+            - REQUEST_ALREADY_EXISTS
+            - USER_BLOCKED
+            - INVALID_STATE
+            - CONVERSATION_LOCKED
+            - INVALID_PIN
+            - PIN_TEMPORARILY_LOCKED
+            - INVALID_OTP
+            - FILE_TOO_LARGE
+            - UNSUPPORTED_FILE_TYPE
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+        message:
+          type: string
+          description: Thông điệp hiển thị cho người dùng (tiếng Việt).
+        details:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+        requestId:
+          type: string
+          description: Mã truy vết yêu cầu (trùng header `X-Request-Id`).
+
+    PageMeta:
+      type: object
+      required: [page, pageSize, totalItems, totalPages]
+      properties:
+        page: { type: integer, example: 1 }
+        pageSize: { type: integer, example: 20 }
+        totalItems: { type: integer, example: 134 }
+        totalPages: { type: integer, example: 7 }
+
+    UserRole:
+      type: string
+      enum: [user, admin, super_admin]
+    UserStatus:
+      type: string
+      enum: [active, deactivated, banned, deleted]
+    ConversationType:
+      type: string
+      enum: [direct, group]
+    MessageType:
+      type: string
+      enum: [text, image, file, call]
+    CallType:
+      type: string
+      enum: [voice, video]
+    CallStatus:
+      type: string
+      description: |
+        `ringing` đang đổ chuông · `ongoing` đang đàm thoại · `ended` đã kết thúc bình thường ·
+        `missed` nhỡ (hết thời gian đổ chuông) · `rejected` bên nhận từ chối ·
+        `canceled` bên gọi hủy trước khi được nghe · `failed` lỗi kết nối.
+      enum: [ringing, ongoing, ended, missed, rejected, canceled, failed]
+
+    Password:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+      pattern: '^(?=.*[A-Za-z])(?=.*\d).+$'
+      description: 8-72 ký tự (giới hạn bcrypt), có ít nhất 1 chữ cái và 1 chữ số.
+      example: Matkhau123
+    Pin:
+      type: string
+      pattern: '^\d{4}$'
+      description: Mã PIN gồm đúng 4 chữ số.
+      example: '1234'
+    Username:
+      type: string
+      pattern: '^[A-Za-z0-9_.]{3,30}$'
+      description: 3-30 ký tự gồm chữ cái, số, `_` và `.`. Không phân biệt hoa/thường.
+      example: alice_01
+
+    # ----- Auth -----
+    RegisterRequest:
+      type: object
+      required: [email, username, displayName, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254, example: alice@example.com }
+        username: { $ref: '#/components/schemas/Username' }
+        displayName: { type: string, minLength: 1, maxLength: 100, example: Nguyễn Trang }
+        password: { $ref: '#/components/schemas/Password' }
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          description: Email hoặc Username
+          example: alice@example.com
+        password: { type: string, format: password }
+    ResetPasswordRequest:
+      type: object
+      required: [email, otp, newPassword, confirmPassword]
+      properties:
+        email: { type: string, format: email }
+        otp: { type: string, pattern: '^\d{6}$', example: '482913' }
+        newPassword: { $ref: '#/components/schemas/Password' }
+        confirmPassword:
+          type: string
+          format: password
+          description: Phải trùng `newPassword`.
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword, confirmPassword]
+      properties:
+        currentPassword: { type: string, format: password }
+        newPassword: { $ref: '#/components/schemas/Password' }
+        confirmPassword: { type: string, format: password }
+    AuthTokens:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string, description: 'JWT chứa các claim `sub` (userId), `role` và `sid` (sessionId)' }
+        refreshToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, example: 900, description: Thời hạn access token (giây) }
+    AuthResponse:
+      type: object
+      required: [tokens, user]
+      properties:
+        tokens: { $ref: '#/components/schemas/AuthTokens' }
+        user: { $ref: '#/components/schemas/UserProfile' }
+
+    # ----- Người dùng -----
+    UserSummary:
+      type: object
+      required: [id, username, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string, example: alice_01 }
+        displayName: { type: string, example: Nguyễn Trang }
+        avatarUrl: { type: string, format: uri, nullable: true }
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/UserSummary'
+        - type: object
+          required: [email, role, status, createdAt]
+          properties:
+            email: { type: string, format: email }
+            bio: { type: string, nullable: true }
+            role: { $ref: '#/components/schemas/UserRole' }
+            status: { $ref: '#/components/schemas/UserStatus' }
+            createdAt: { type: string, format: date-time }
+    PublicUser:
+      allOf:
+        - $ref: '#/components/schemas/UserSummary'
+        - type: object
+          required: [relationship]
+          properties:
+            bio: { type: string, nullable: true }
+            relationship:
+              type: string
+              description: |
+                Quan hệ của bạn với người này: `none` chưa có · `friend` đã là bạn ·
+                `request_sent` bạn đã gửi lời mời · `request_received` họ đã gửi lời mời cho bạn ·
+                `blocked` bạn đã chặn họ.
+              enum: [none, friend, request_sent, request_received, blocked]
+            friendRequestId:
+              type: string
+              format: uuid
+              nullable: true
+              description: ID lời mời đang chờ (khi `relationship` là `request_sent` / `request_received`).
+    UserPresence:
+      allOf:
+        - $ref: '#/components/schemas/UserSummary'
+        - type: object
+          required: [isOnline]
+          properties:
+            isOnline: { type: boolean, description: Đang có kết nối WebSocket (chấm xanh). }
+            lastSeenAt:
+              type: string
+              format: date-time
+              nullable: true
+              description: Thời gian truy cập lần cuối (khi `isOnline = false`).
+    Friend:
+      allOf:
+        - $ref: '#/components/schemas/UserPresence'
+        - type: object
+          required: [friendsSince]
+          properties:
+            friendsSince: { type: string, format: date-time }
+            conversationId:
+              type: string
+              format: uuid
+              nullable: true
+              description: Hội thoại 1-1 với người bạn này (nếu đã có).
+    FriendRequest:
+      type: object
+      required: [id, sender, receiver, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        sender: { $ref: '#/components/schemas/UserSummary' }
+        receiver: { $ref: '#/components/schemas/UserSummary' }
+        status:
+          type: string
+          enum: [pending, accepted, rejected, canceled]
+        createdAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, nullable: true }
+
+    # ----- Hội thoại -----
+    CreateDirectConversationRequest:
+      type: object
+      required: [type, userId]
+      properties:
+        type:
+          type: string
+          enum: [direct]
+        userId: { type: string, format: uuid }
+    CreateGroupConversationRequest:
+      type: object
+      required: [type, name, memberIds]
+      properties:
+        type:
+          type: string
+          enum: [group]
+        name: { type: string, minLength: 1, maxLength: 100, example: Nhóm BTL IT4409 }
+        memberIds:
+          type: array
+          minItems: 2
+          maxItems: 99
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    Conversation:
+      type: object
+      required: [id, type, memberCount, myRole, isLocked, unreadCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/ConversationType' }
+        name:
+          type: string
+          nullable: true
+          description: Tên nhóm (`group`). Với `direct` là `null`, client hiển thị tên của `peer`.
+        avatarUrl: { type: string, format: uri, nullable: true }
+        peer:
+          type: object
+          nullable: true
+          description: Người đối thoại (chỉ với `direct`).
+          allOf:
+            - $ref: '#/components/schemas/UserPresence'
+        memberCount: { type: integer, example: 2 }
+        myRole:
+          type: string
+          enum: [admin, member]
+          description: "`admin` = Trưởng nhóm. Với hội thoại `direct` luôn là `member`."
+        isLocked:
+          type: boolean
+          description: Bạn đã đặt PIN cho hội thoại này.
+        unreadCount: { type: integer, minimum: 0 }
+        lastMessage:
+          type: object
+          nullable: true
+          description: "`null` nếu chưa có tin nhắn hoặc hội thoại đang bị khóa PIN."
+          allOf:
+            - $ref: '#/components/schemas/Message'
+        lastMessageAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ConversationMember:
+      type: object
+      required: [user, role, joinedAt]
+      properties:
+        user: { $ref: '#/components/schemas/UserPresence' }
+        role:
+          type: string
+          enum: [admin, member]
+        joinedAt: { type: string, format: date-time }
+        lastReadMessageId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Con trỏ "đã xem" của thành viên này (dùng để hiển thị Đã xem).
+
+    # ----- Tin nhắn -----
+    SendMessageRequest:
+      type: object
+      required: [clientMessageId, type]
+      properties:
+        clientMessageId:
+          type: string
+          format: uuid
+          description: UUID do client sinh, dùng chống gửi trùng.
+        type:
+          type: string
+          enum: [text, image, file]
+        content:
+          type: string
+          maxLength: 5000
+          description: Nội dung văn bản (bắt buộc với `text`) hoặc chú thích (với `image`/`file`).
+        attachmentIds:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    Attachment:
+      type: object
+      required: [id, kind, fileName, mimeType, sizeBytes, url, urlExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [image, file]
+        fileName: { type: string, example: bao-cao.pdf }
+        mimeType: { type: string, example: application/pdf }
+        sizeBytes: { type: integer, format: int64, maximum: 20971520 }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        url:
+          type: string
+          format: uri
+          description: Presigned URL của MinIO.
+        urlExpiresAt: { type: string, format: date-time }
+    CallSummary:
+      type: object
+      description: Thông tin cuộc gọi gắn trong tin nhắn hệ thống `type = call`.
+      required: [id, callType, status, callerId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        callType: { $ref: '#/components/schemas/CallType' }
+        status: { $ref: '#/components/schemas/CallStatus' }
+        callerId: { type: string, format: uuid }
+        durationSeconds:
+          type: integer
+          nullable: true
+          description: Thời lượng đàm thoại; `null` nếu cuộc gọi không được nghe máy.
+          example: 195
+        screenShared: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Message:
+      type: object
+      required: [id, conversationId, type, recalled, createdAt]
+      properties:
+        id: { type: integer, format: int64, example: 10452 }
+        conversationId: { type: string, format: uuid }
+        clientMessageId: { type: string, format: uuid, nullable: true }
+        sender:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserSummary'
+        type: { $ref: '#/components/schemas/MessageType' }
+        content: { type: string, nullable: true }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        call:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CallSummary'
+        recalled: { type: boolean }
+        recalledAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    MessagePage:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          description: Sắp xếp mới → cũ.
+          items: { $ref: '#/components/schemas/Message' }
+        hasMore:
+          type: boolean
+          description: Còn tin nhắn để tải tiếp theo hướng đang phân trang.
+        nextBefore:
+          type: integer
+          format: int64
+          nullable: true
+          description: Truyền vào `before` để tải trang cũ hơn (bằng `id` nhỏ nhất trong `items`).
+
+    # ----- Cuộc gọi -----
+    IceServer:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          type: array
+          items: { type: string }
+          example: ['stun:stun.l.google.com:19302']
+        username: { type: string, description: Chỉ có với TURN. }
+        credential: { type: string, description: Chỉ có với TURN. }
+    IceServersResponse:
+      type: object
+      required: [iceServers, ttlSeconds]
+      properties:
+        iceServers:
+          type: array
+          items: { $ref: '#/components/schemas/IceServer' }
+          example:
+            - urls: ['stun:stun.l.google.com:19302']
+            - urls: ['turn:turn.scall.example.com:3478?transport=udp', 'turns:turn.scall.example.com:5349?transport=tcp']
+              username: '1760700000:7b0c1f0e'
+              credential: 'q3pF0yH0v1n7b1o2Zq5E1c4Y9fE='
+        ttlSeconds: { type: integer, example: 3600 }
+    Call:
+      type: object
+      required: [id, conversationId, caller, callee, callType, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        caller: { $ref: '#/components/schemas/UserSummary' }
+        callee: { $ref: '#/components/schemas/UserSummary' }
+        callType: { $ref: '#/components/schemas/CallType' }
+        status: { $ref: '#/components/schemas/CallStatus' }
+        endReason:
+          type: string
+          nullable: true
+          enum: [hangup, timeout, rejected, canceled, busy, disconnected, failed, blocked]
+        screenShared: { type: boolean }
+        createdAt: { type: string, format: date-time, description: Thời điểm bắt đầu đổ chuông }
+        answeredAt: { type: string, format: date-time, nullable: true }
+        endedAt: { type: string, format: date-time, nullable: true }
+        durationSeconds: { type: integer, nullable: true }
+
+    # ----- Quản trị -----
+    AdminStats:
+      type: object
+      required: [totalUsers, onlineUsers, totalGroups, totalMessages, totalFiles, storageBytes]
+      properties:
+        totalUsers: { type: integer, example: 1250 }
+        onlineUsers: { type: integer, example: 87, description: Số người dùng đang có kết nối WebSocket }
+        totalGroups: { type: integer, example: 64 }
+        totalMessages: { type: integer, format: int64, example: 48210 }
+        totalFiles: { type: integer, example: 932 }
+        storageBytes:
+          type: integer
+          format: int64
+          example: 734003200
+          description: Dung lượng MinIO đang dùng cho tệp trong chat.
+    AdminUser:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          properties:
+            isOnline: { type: boolean }
+            lastSeenAt: { type: string, format: date-time, nullable: true }
+            bannedAt: { type: string, format: date-time, nullable: true }
+            banReason: { type: string, nullable: true }
+            deletedAt: { type: string, format: date-time, nullable: true }
+    AuditLog:
+      type: object
+      required: [id, action, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        actor:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserSummary'
+        action:
+          type: string
+          example: user.ban
+        target:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserSummary'
+        metadata:
+          type: object
+          additionalProperties: true
+          example: { reason: Spam tin nhắn }
+        ipAddress: { type: string, nullable: true, example: 203.0.113.5 }
+        createdAt: { type: string, format: date-time }
+    DevEmail:
+      type: object
+      required: [id, to, template, subject, body, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        to: { type: string, format: email }
+        template:
+          type: string
+          enum: [password_reset_otp, super_admin_login_alert]
+        subject: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
