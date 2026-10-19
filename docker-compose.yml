@@ -1,0 +1,205 @@
+# =====================================================================
+# S-Call - Docker Compose
+#
+#   docker compose up -d --build                        # chạy toàn bộ hệ thống (http://localhost:8080)
+#   docker compose --profile tunnel up -d               # + Cloudflare Tunnel (tên miền cố định, cần token)
+#   docker compose --profile quick-tunnel up -d         # + Cloudflare Quick Tunnel (URL ngẫu nhiên, không cần tài khoản)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build   # chế độ lập trình (hot-reload)
+#
+# Kiến trúc: MỘT điểm vào duy nhất là `frontend` (nginx):
+#   trình duyệt --> frontend:80 --+--> /                       file tĩnh React
+#                                 +--> /api, /ws               backend:3000
+#                                 +--> /avatars, /chat-files   minio:9000
+#   backend --> postgres:5432, minio:9000          |   WebRTC media: trình duyệt <--P2P/TURN--> trình duyệt (coturn)
+# =====================================================================
+
+name: scall
+
+services:
+  # ------------------------------------------------------------------
+  # PostgreSQL: tự chạy database/*.sql (schema rồi seed) khi volume còn rỗng
+  # ------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      PGTZ: ${TZ:-Asia/Ho_Chi_Minh}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # ------------------------------------------------------------------
+  # MinIO: lưu ảnh đại diện, ảnh và tệp trong chat
+  # Lưu ý: MinIO đã ngừng đăng image chính thức lên Docker Hub/Quay (minio/minio), nên dùng bản dựng
+  # cộng đồng `alpine/minio` từ đúng release mã nguồn cuối cùng RELEASE.2025-10-15T17-29-55Z (S3 API đầy đủ).
+  # ------------------------------------------------------------------
+  minio:
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    restart: unless-stopped
+    user: "0:0" # image chạy bằng user `minio`, không ghi được vào named volume (thuộc root)
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # Chạy một lần: tạo bucket, đặt quyền, nạp ảnh/tệp mẫu của Seed Data (dùng AWS CLI vì MinIO nói chuẩn S3)
+  minio-init:
+    image: amazon/aws-cli:2.38.1
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_EC2_METADATA_DISABLED: "true"
+      MINIO_BUCKET_AVATARS: ${MINIO_BUCKET_AVATARS:-avatars}
+      MINIO_BUCKET_CHAT: ${MINIO_BUCKET_CHAT:-chat-files}
+      MINIO_SEED_DEMO: ${MINIO_SEED_DEMO:-true}
+    volumes:
+      - ./docker/minio/seed:/seed:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        aws configure set default.s3.addressing_style path
+        for b in "$$MINIO_BUCKET_AVATARS" "$$MINIO_BUCKET_CHAT"; do
+          aws s3api head-bucket --bucket "$$b" 2>/dev/null || aws s3api create-bucket --bucket "$$b"
+        done
+        # Ảnh đại diện: đọc công khai (URL ổn định). Tệp chat: riêng tư, chỉ truy cập qua presigned URL
+        policy=$$(printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}' "$$MINIO_BUCKET_AVATARS")
+        aws s3api put-bucket-policy --bucket "$$MINIO_BUCKET_AVATARS" --policy "$$policy"
+        aws s3api delete-bucket-policy --bucket "$$MINIO_BUCKET_CHAT" || true
+        if [ "$$MINIO_SEED_DEMO" = "true" ]; then
+          echo "Nạp ảnh/tệp mẫu của Seed Data..."
+          aws s3 sync /seed/avatars "s3://$$MINIO_BUCKET_AVATARS" --no-progress
+          aws s3 sync /seed/chat-files "s3://$$MINIO_BUCKET_CHAT" --no-progress
+        fi
+        echo "MinIO sẵn sàng."
+
+  # ------------------------------------------------------------------
+  # Coturn: TURN/STUN server cho WebRTC (xuyên NAT khi gọi khác mạng)
+  #  - Xác thực bằng credential tạm thời (TURN REST API) do backend sinh từ TURN_SECRET
+  #  - Cloudflare Tunnel KHÔNG chuyển được UDP: cổng 3478 và dải relay phải mở trực tiếp ra Internet
+  #    (port-forward trên router), hoặc dùng TURN_MODE=metered. Xem README.
+  # ------------------------------------------------------------------
+  coturn:
+    image: coturn/coturn:4.18.0
+    restart: unless-stopped
+    environment:
+      TURN_REALM: ${TURN_REALM:-scall.local}
+      TURN_SECRET: ${TURN_SECRET}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49160}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-49200}
+    ports:
+      - "${TURN_PORT:-3478}:3478/udp"
+      - "${TURN_PORT:-3478}:3478/tcp"
+      - "${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}:${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}/udp"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec turnserver -n \
+          --log-file=stdout --simple-log \
+          --realm="$$TURN_REALM" \
+          --use-auth-secret --static-auth-secret="$$TURN_SECRET" \
+          --listening-port=3478 \
+          --min-port="$$TURN_MIN_PORT" --max-port="$$TURN_MAX_PORT" \
+          --fingerprint --no-tls --no-multicast-peers \
+          $${TURN_EXTERNAL_IP:+--external-ip="$$TURN_EXTERNAL_IP"}
+
+  # ------------------------------------------------------------------
+  # Backend: REST API + WebSocket/Signaling (Node.js)
+  # ------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-${PUBLIC_URL}}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+
+  # ------------------------------------------------------------------
+  # Frontend: NginX (file tĩnh React + reverse proxy). ĐIỂM VÀO DUY NHẤT.
+  # ------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+  # ------------------------------------------------------------------
+  # Cloudflare Tunnel - đặt tên miền HTTPS công khai (cần cho Camera / Mic trên điện thoại)
+  # ------------------------------------------------------------------
+  # Tunnel có tên miền cố định (remote-managed): trong Cloudflare Zero Trust, thêm Public Hostname trỏ tới
+  # Service = HTTP | frontend:80. Chỉ cần CLOUDFLARE_TUNNEL_TOKEN.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.1
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
+  # Quick Tunnel: không cần tài khoản, URL ngẫu nhiên dạng https://xxxx.trycloudflare.com (xem log của container)
+  cloudflared-quick:
+    image: cloudflare/cloudflared:2026.10.1
+    profiles: ["quick-tunnel"]
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --url http://frontend:80
+
+volumes:
+  pgdata:
+  miniodata:
