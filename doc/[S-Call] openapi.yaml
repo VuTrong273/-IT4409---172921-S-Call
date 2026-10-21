@@ -32,8 +32,8 @@ info:
     | Role | Quyền |
     |---|---|
     | `user` | Mọi chức năng người dùng. Trong nhóm chat, người tạo nhóm có thêm quyền **Trưởng nhóm** (`myRole = group_admin`). |
-    | `admin` | Đăng nhập, đổi mật khẩu, đăng xuất, quản lý Dashboard, người dùng (tìm kiếm, khóa/mở khóa, xóa) |
-    | `super_admin` | Chỉ có thể đăng nhập và đăng xuất, tạo/xóa Admin, đổi mật khẩu Admin không cần OTP, xem nhật ký thao tác. Mỗi lần đăng nhập hệ thống gửi email cảnh báo. |
+    | `admin` | Đăng nhập, đổi mật khẩu, đăng xuất, quản lý Dashboard, người dùng (tìm kiếm, khóa/mở khóa, xóa), xem nhật ký thao tác của Admins |
+    | `super_admin` | Chỉ có thể đăng nhập và đăng xuất, tạo/xóa Admin, đổi mật khẩu Admin không cần OTP, xem nhật ký thao tác của Admins. Mỗi lần đăng nhập hệ thống gửi email cảnh báo. |
 
     Mỗi operation quản trị có extension `x-roles` ghi role tối thiểu.
 
