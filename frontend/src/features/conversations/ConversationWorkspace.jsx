@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './lib/api.js';
+import { api } from '../../lib/api.js';
 
 // Khung giao diện theo PRD: 2 cột trên máy tính (trái: danh sách hội thoại, phải: khung chat / màn hình gọi),
 // thu gọn thành 1 cột trên điện thoại (chuyển qua lại giữa danh sách và màn hình chat).
