@@ -174,7 +174,7 @@ BEGIN
     INSERT INTO users (id, email, username, display_name, password_hash, role, status,
                        banned_at, banned_by, ban_reason, last_seen_at, created_at)
     VALUES (u_mallory, 'quockhanh@scall.local', 'quockhanh', 'Lý Quốc Khánh', v_pw, 'user', 'banned',
-            now() - interval '2 days', u_admin, 'Rải link rác và spam tin nhắn quảng cáo liên tục', now() - interval '2 days', now() - interval '6 days');
+            now() - interval '2 days', u_admin, 'Ban đại user để test hệ thống', now() - interval '2 days', now() - interval '6 days');
 
     -- Tự vô hiệu hóa
     INSERT INTO users (id, email, username, display_name, password_hash, role, status,
