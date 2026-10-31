@@ -16,11 +16,11 @@ function useHealth() {
 }
 
 function StatusBadge({ health }) {
-  if (health.loading) return <span className="text-sm text-gray-500">Đang kiểm tra hệ thống ...</span>;
+  if (health.loading) return <span className="text-sm text-secondary">Đang kiểm tra hệ thống ...</span>;
   const ok = health.ok && health.data.status === 'ok';
   return (
-    <span className={`inline-flex items-center gap-2 text-sm ${ok ? 'text-green-600' : 'text-red-600'}`}>
-      <span className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
+    <span className={`inline-flex items-center gap-2 text-sm ${ok ? 'text-green-600' : 'text-error'}`}>
+      <span className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-error'}`} />
       {ok
         ? `API ${health.data.status} · DB ${health.data.database} · MinIO ${health.data.storage}`
         : `Không kết nối được backend (${health.error ?? health.data?.status})`}
@@ -33,17 +33,17 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false); // chỉ dùng trên mobile
 
   return (
-    <div className="flex h-full bg-gray-50 text-gray-900">
+    <div className="flex h-full bg-surface text-on-surface">
       {/* Cột trái: danh sách hội thoại / bạn bè */}
       <aside className={`${chatOpen ? 'hidden' : 'flex'} w-full flex-col border-r bg-white md:flex md:w-80`}>
         <header className="flex items-center gap-2 border-b p-4">
           <img src="/favicon.svg" alt="" className="h-8 w-8" />
           <h1 className="text-lg font-semibold">S-Call</h1>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 text-sm text-gray-500">
+        <div className="flex-1 overflow-y-auto p-4 text-sm text-secondary">
           <p className="mb-3">Danh sách hội thoại sẽ hiển thị ở đây.</p>
           <button
-            className="rounded-lg bg-blue-600 px-3 py-2 text-white md:hidden"
+            className="rounded-lg bg-primary-container px-3 py-2 text-white md:hidden"
             onClick={() => setChatOpen(true)}
           >
             Mở khung chat (mobile)
@@ -62,7 +62,7 @@ export default function App() {
           </button>
           <h2 className="font-medium">Khung chat</h2>
         </header>
-        <div className="flex flex-1 items-center justify-center p-6 text-gray-400">
+        <div className="flex flex-1 items-center justify-center p-6 text-outline">
           Chọn một cuộc trò chuyện để bắt đầu
         </div>
       </main>
