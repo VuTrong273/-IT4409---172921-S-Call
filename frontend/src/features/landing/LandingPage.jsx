@@ -1,3 +1,5 @@
+import { Link } from 'react-router';
+
 const chats = [
   { initials: 'ML', name: 'Minh Linh', preview: 'Tối nay mình gọi nhé?', time: '10:42', color: 'bg-rose-200 text-rose-700', active: true },
   { initials: 'QA', name: 'Quân Anh', preview: 'Đã gửi một hình ảnh', time: '09:18', color: 'bg-amber-200 text-amber-800' },
@@ -53,7 +55,7 @@ export default function LandingPage() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
         <a href="#home" className="flex items-center gap-2.5 text-lg font-bold tracking-tight"><img src="/favicon.svg" alt="" className="h-9 w-9" />S-Call</a>
         <div className="hidden items-center gap-8 text-sm text-slate-500 md:flex"><a className="transition hover:text-violet-700" href="#features">Tính năng</a><a className="transition hover:text-violet-700" href="#about">Về S-Call</a></div>
-        <a href="#start" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700">Đăng nhập</a>
+        <Link to="/login" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700">Đăng nhập</Link>
       </nav>
 
       <section id="home" className="mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-12 sm:px-8 md:pt-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10 lg:px-12 lg:pb-28 lg:pt-20">
@@ -61,7 +63,7 @@ export default function LandingPage() {
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-100 bg-white px-3.5 py-2 text-xs font-medium text-violet-700 shadow-sm"><span className="h-2 w-2 rounded-full bg-emerald-400" />Gần nhau hơn, dù ở bất cứ đâu</div>
           <h1 className="text-[clamp(2.8rem,6vw,5.2rem)] font-semibold leading-[1.04] tracking-[-0.065em] text-slate-900">Một lời nhắn,<br />kết nối <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-orange-400 bg-clip-text text-transparent">cả khoảng cách.</span></h1>
           <p className="mt-6 max-w-md text-base leading-7 text-slate-500 sm:text-lg sm:leading-8">Trò chuyện, chia sẻ và gọi cho những người bạn thương quý — tất cả trong một không gian thân thuộc.</p>
-          <div id="start" className="mt-8 flex flex-wrap items-center gap-3"><a href="#signup" className="rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5 hover:bg-violet-700">Bắt đầu trò chuyện <span className="ml-2">→</span></a><a href="#features" className="rounded-full px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-white">Khám phá S-Call</a></div>
+          <div id="start" className="mt-8 flex flex-wrap items-center gap-3"><Link to="/register" className="rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5 hover:bg-violet-700">Bắt đầu trò chuyện <span className="ml-2">→</span></Link><a href="#features" className="rounded-full px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-white">Khám phá S-Call</a></div>
           <div className="mt-10 flex items-center gap-3 text-xs text-slate-400"><div className="flex -space-x-2"><span className="grid h-7 w-7 place-items-center rounded-full border-2 border-[#fcfbff] bg-amber-200 text-[9px] font-bold text-amber-800">A</span><span className="grid h-7 w-7 place-items-center rounded-full border-2 border-[#fcfbff] bg-sky-200 text-[9px] font-bold text-sky-800">B</span><span className="grid h-7 w-7 place-items-center rounded-full border-2 border-[#fcfbff] bg-rose-200 text-[9px] font-bold text-rose-800">C</span></div><span>Kết nối dễ dàng trên mọi thiết bị</span></div>
         </div>
         <ChatPreview />
@@ -77,3 +79,4 @@ export default function LandingPage() {
     </main>
   );
 }
+
