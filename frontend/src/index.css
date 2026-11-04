@@ -57,7 +57,8 @@ body { margin: 0; background: var(--color-surface); color: var(--color-on-surfac
 :focus-visible { outline: 2px solid var(--color-primary-container); outline-offset: 3px; }
 ::selection { background: var(--color-primary-fixed); color: var(--color-on-primary-fixed); }
 
-.landing-page {
+.landing-page,
+.auth-login {
   --color-surface: #ffffff;
   --color-surface-container-low: #f5f7fc;
   --color-surface-container: #edf2fc;
@@ -71,6 +72,16 @@ body { margin: 0; background: var(--color-surface); color: var(--color-on-surfac
 }
 
 .landing-hero { background: #f8faff; }
+
+.auth-login input::-ms-reveal,
+.auth-login input::-ms-clear { display: none; }
+
+.auth-login .login-input:focus,
+.auth-login .login-input:focus-visible {
+  border-color: var(--color-primary-container);
+  outline: none;
+  box-shadow: none;
+}
 
 .landing-container {
   width: 100%;
