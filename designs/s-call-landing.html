@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="vi"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>S-Call — Nhắn tin dễ dàng. Gọi nhau gần hơn.</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "tertiary-container": "#00759f", "on-background": "#131b2e", "error-container": "#ffdad6", "on-secondary": "#ffffff", "inverse-on-surface": "#eef0ff", "primary-fixed": "#dbe1ff", "outline-variant": "#c3c6d7", "on-tertiary-container": "#e1f2ff", "surface-container-low": "#f2f3ff", "inverse-surface": "#283044", "surface-tint": "#0053db", "on-primary-fixed-variant": "#003ea8", "surface-container-highest": "#dae2fd", "primary-fixed-dim": "#b4c5ff", "error": "#ba1a1a", "on-tertiary-fixed": "#001e2c", "surface-bright": "#faf8ff", "surface-variant": "#dae2fd", "outline": "#737686", "on-surface-variant": "#434655", "surface-container-lowest": "#ffffff", "tertiary-fixed": "#c4e7ff", "secondary-fixed-dim": "#b9c8db", "on-surface": "#131b2e", "surface-container-high": "#e2e7ff", "on-error-container": "#93000a", "on-tertiary": "#ffffff", "primary-container": "#2563eb", "surface": "#faf8ff", "on-primary-container": "#eeefff", "primary": "#004ac6", "tertiary-fixed-dim": "#7bd0ff", "on-primary-fixed": "#00174b", "on-error": "#ffffff", "on-secondary-fixed-variant": "#3a4858", "on-tertiary-fixed-variant": "#004c69", "background": "#faf8ff", "secondary-fixed": "#d5e4f8", "on-secondary-fixed": "#0e1d2b", "secondary": "#516070", "surface-container": "#eaedff", "on-primary": "#ffffff", "inverse-primary": "#b4c5ff", "tertiary": "#005b7c", "on-secondary-container": "#576676", "surface-dim": "#d2d9f4", "secondary-container": "#d5e4f8" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter-mobile": "1rem", "space-xs": "0.25rem", "margin-mobile": "1.25rem", "gutter": "1.5rem", "margin": "3rem", "margin-tablet": "2rem", "space-xl": "2.5rem", "space-md": "1rem", "space-lg": "1.5rem", "space-sm": "0.5rem" }, "fontFamily": { "headline-md-mobile": [ "Plus Jakarta Sans" ], "headline-md": [ "Plus Jakarta Sans" ], "display-hero": [ "Plus Jakarta Sans" ], "headline-sm": [ "Plus Jakarta Sans" ], "label-sm": [ "Inter" ], "body-md": [ "Plus Jakarta Sans" ], "body-lg": [ "Plus Jakarta Sans" ], "headline-lg": [ "Plus Jakarta Sans" ], "display-hero-mobile": [ "Plus Jakarta Sans" ], "body-sm": [ "Plus Jakarta Sans" ], "headline-lg-mobile": [ "Plus Jakarta Sans" ], "label-md": [ "Inter" ], "label-lg": [ "Inter" ] }, "fontSize": { "headline-md-mobile": [ "22px", { "lineHeight": "30px", "letterSpacing": "-0.01em", "fontWeight": "700" } ], "headline-md": [ "28px", { "lineHeight": "36px", "letterSpacing": "-0.015em", "fontWeight": "700" } ], "display-hero": [ "56px", { "lineHeight": "68px", "letterSpacing": "-0.03em", "fontWeight": "800" } ], "headline-sm": [ "20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" } ], "label-sm": [ "11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" } ], "body-md": [ "16px", { "lineHeight": "26px", "fontWeight": "400" } ], "body-lg": [ "18px", { "lineHeight": "28px", "fontWeight": "400" } ], "headline-lg": [ "40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" } ], "display-hero-mobile": [ "36px", { "lineHeight": "44px", "letterSpacing": "-0.025em", "fontWeight": "800" } ], "body-sm": [ "14px", { "lineHeight": "22px", "fontWeight": "400" } ], "headline-lg-mobile": [ "28px", { "lineHeight": "36px", "letterSpacing": "-0.015em", "fontWeight": "700" } ], "label-md": [ "12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" } ], "label-lg": [ "14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" } ] } } } };</script><meta name="description" content="Khám phá thiết kế S-Call: nhắn tin cá nhân và nhóm, gọi thoại/video, chia sẻ tệp và khóa trò chuyện bằng PIN."/>
+<style>
+html{scroll-padding-top:110px}body{overflow-x:hidden}a,button,summary,input{touch-action:manipulation}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #2563eb;outline-offset:5px}summary{cursor:pointer}summary::marker{color:#2563eb}.material-symbols-outlined{vertical-align:middle}#demo input{min-width:0}#demo button{cursor:default}#demo img{background:#dbe1ff}dialog{border:0;border-radius:24px;padding:32px;max-width:460px;width:calc(100% - 40px);color:#131b2e}dialog::backdrop{background:rgba(19,27,46,.45);backdrop-filter:blur(4px)}
+@media(max-width:639px){#demo .min-h-\[560px\]{min-height:0}#demo .w-64{width:100%}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation:none!important;transition:none!important}}
+</style></head><body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-fixed">
+<a class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] bg-white p-3 rounded-xl" href="#home">Đến nội dung chính</a>
+<header class="sticky top-0 z-50 bg-surface/95 backdrop-blur-xl border-b border-primary/5">
+<div class="max-w-[1200px] mx-auto px-6 lg:px-12 h-20 flex items-center justify-between gap-4"><a href="#home" class="flex items-center gap-3 font-bold text-xl tracking-tight"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-container text-white"><span class="material-symbols-outlined" aria-hidden="true">forum</span></span>S-Call</a>
+<nav aria-label="Điều hướng chính" class="hidden lg:flex gap-6 text-sm font-semibold text-on-surface-variant"><a href="#features">Tính năng</a><a href="#how-it-works">Cách sử dụng</a><a href="#privacy">Quyền riêng tư</a><a href="#faq">Câu hỏi thường gặp</a></nav>
+<div class="flex items-center gap-2"><button type="button" data-auth="login" class="hidden sm:block px-4 py-3 text-sm font-semibold rounded-full hover:bg-primary-fixed">Đăng nhập</button><button type="button" data-auth="register" class="px-5 py-3 rounded-full bg-primary-container text-white text-sm font-semibold hover:bg-primary">Đăng ký</button></div></div>
+<details class="lg:hidden px-6 pb-3"><summary class="text-sm font-semibold py-2">Khám phá S-Call</summary><nav aria-label="Điều hướng trên điện thoại" class="flex flex-wrap gap-4 py-3 text-sm"><a href="#features">Tính năng</a><a href="#how-it-works">Cách sử dụng</a><a href="#privacy">Quyền riêng tư</a><a href="#faq">FAQ</a><button type="button" data-auth="login">Đăng nhập</button></nav></details></header>
+<main><section id="home" class="relative pt-12 lg:pt-20 pb-20 bg-gradient-to-b from-surface via-surface-container-low/60 to-background"><div class="max-w-[1200px] mx-auto px-6 lg:px-12 text-center">
+<span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-fixed/60 text-primary text-xs font-semibold mb-6"><span class="material-symbols-outlined" aria-hidden="true">chat_bubble</span> Một không gian cho những cuộc trò chuyện mỗi ngày</span>
+<h1 class="text-4xl sm:text-5xl lg:text-[64px] leading-[1.15] font-extrabold tracking-tight max-w-4xl mx-auto">Nhắn tin dễ dàng.<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-primary-container to-tertiary-container">Gọi nhau gần hơn.</span></h1>
+<p class="max-w-2xl mx-auto mt-6 text-lg leading-8 text-on-surface-variant">Từ một lời chào đến những câu chuyện dài. S-Call mang tin nhắn, cuộc gọi và những điều bạn muốn chia sẻ về cùng một nơi.</p>
+<div class="flex flex-wrap justify-center gap-3 mt-8"><a href="#features" class="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold transition bg-primary-container text-white shadow-lg shadow-blue-200/50 hover:bg-primary">Khám phá S-Call<span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a><a href="#demo" class="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold transition bg-white text-on-surface hover:bg-surface-container-low">Xem giao diện</a></div>
+<div class="flex flex-wrap justify-center gap-x-6 gap-y-3 mt-7 text-sm text-on-surface-variant"><span><span class="material-symbols-outlined" aria-hidden="true">chat</span> Chat cá nhân &amp; nhóm</span><span><span class="material-symbols-outlined" aria-hidden="true">videocam</span> Gọi thoại &amp; video</span><span><span class="material-symbols-outlined" aria-hidden="true">language</span> Thiết kế cho trình duyệt</span></div>
+<p class="text-xs text-on-surface-variant mt-6 mb-10">Bản xem trước thiết kế • Các tính năng đang được phát triển theo đặc tả S-Call.</p>
+<figure aria-label="Minh họa giao diện S-Call">
+<div class="w-full max-w-5xl mx-auto relative rounded-3xl bg-surface-container-lowest shadow-[0_24px_64px_-12px_rgba(15,23,42,0.14)] overflow-hidden" id="demo">
+<!-- Window Mockup Header -->
+<div class="w-full bg-surface-container-low px-5 py-3.5 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-rose-400"></div>
+<div class="w-3 h-3 rounded-full bg-amber-400"></div>
+<div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+<span class="ml-3 font-label-sm text-label-sm text-on-surface-variant font-medium">S-Call · Giao diện minh họa</span>
+</div>
+<div class="flex items-center gap-3 text-on-surface-variant">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Bản xem trước
+            </span>
+</div>
+</div>
+<!-- App Body Layout -->
+<div class="grid grid-cols-12 min-h-[560px] text-left">
+<!-- Left Mini Rail Navigation -->
+<div class="col-span-1 hidden sm:flex flex-col items-center justify-between py-6 bg-surface-container-low">
+<div class="flex flex-col items-center gap-6">
+<div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-tertiary-container flex items-center justify-center text-on-primary shadow-md">
+<span class="material-symbols-outlined text-[24px]">forum</span>
+</div>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[20px]">chat</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-10 h-10 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">group</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-10 h-10 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">call</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-10 h-10 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+<div class="flex flex-col items-center gap-4">
+<div class="w-9 h-5 rounded-full bg-primary-container p-0.5 flex items-center justify-end">
+<div class="w-4 h-4 rounded-full bg-surface-container-lowest shadow-sm"></div>
+</div>
+<img class="w-9 h-9 rounded-full object-cover shadow-sm" alt="Chân dung tài khoản chính trong ứng dụng ảnh đại diện cá nhân chất lượng cao" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTrB7_5bW5m6aj4g9aFS3wsYixvJRGyE6MWxKg00GZTYp5sIj0cuIZAJugys0nqlPCFURc8sxLna4ppi__nS-WmOKuzkAPaCkO9EkUFeDFG2et_udfzKV5S-ze30MOjLWABXLJ0jjgzIjX8fvHG7ID-phDhzzfB9_I2k8gdESIquBnXvsw2KjElAPOANr08Wvh4RQAlhaswacxJyIhVnZTY-OPt7G-BAzfonH4qHFdHlJEIPIt3Bxy"/>
+</div>
+</div>
+<!-- Middle Chats List Column -->
+<div class="hidden sm:flex sm:col-span-5 md:col-span-4 bg-surface-container-lowest p-4 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold tracking-tight">Tin nhắn</h3>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-8 h-8 rounded-full hover:bg-surface-container-low flex items-center justify-center text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[20px]">edit_square</span>
+</button>
+</div>
+<!-- Search input -->
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full pl-9 pr-4 py-2 rounded-xl bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:bg-surface-container transition-all" placeholder="Tìm kiếm liên hệ, tin nhắn..." type="text" value="" readonly tabindex="-1" aria-label="Nội dung minh họa"/>
+</div>
+<!-- Pinned section -->
+<div class="flex flex-col gap-1.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold px-2">Cuộc trò chuyện</span>
+<!-- Active Chat Item -->
+<div class="flex items-center justify-between p-3 rounded-2xl bg-primary-container text-on-primary shadow-sm cursor-pointer transition-transform hover:scale-[1.01]">
+<div class="flex items-center gap-3">
+<div class="relative">
+<img class="w-11 h-11 rounded-full object-cover ring-2 ring-white/30" alt="Ảnh đại diện nhân vật Minh Anh mỉm cười thân thiện trong giao diện chat trực tuyến" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6gmWAZzP4jy4BZZl2a3AhnK97BjcNVMzwbzU-rlAswOA0ehyNT7PP_C2MTDlJ0Ksa-labczw4HhxaN6IJwLhiI2f9T5w2ryhg10nZgcYnFPgihkZL7xZFJVQUmQEhIpOvC1d7B7QbjQSHXzPyh2ji4c910TeObfD3hohZo0Wwp3_mcwvCx8bOxochCcBbKeoCp2bldswdVvT9YbikqTLF6arBBP4pxz9xMmO28pZ70MWyxXsaA90H"/>
+<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-primary-container"></span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg font-bold text-on-primary">Minh Anh</span>
+<span class="font-body-sm text-body-sm text-on-primary/80 line-clamp-1">Bạn: Cảm ơn nhé! Đã nhận được file.</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="font-label-sm text-label-sm text-on-primary/70">10:35</span>
+<span class="material-symbols-outlined text-[16px] text-on-primary">done_all</span>
+</div>
+</div>
+<!-- Other Chat Item -->
+<div class="flex items-center justify-between p-3 rounded-2xl hover:bg-surface-container-low text-on-surface cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<div class="relative">
+<img class="w-11 h-11 rounded-full object-cover" alt="Ảnh chân dung đại diện một đồng nghiệp tên Dog Hat với nụ cười sảng khoái năng động" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJTY7srQ4XuwSj08HdTmF_Ki5oDwu0GrbZizhapcz3B92ZIeZv-KvkRgV_q8aO8EcPvTyxojwEfHRVgJT4QbWaA_jqgRciolUSq4ytzmQnsJb7RWzIXc8ZHsJykk0otZcF_v7_dLekjvp-QF3M72zCUyVVKo-h20ba3lQVvaoG0FvWSKuudT1kgPWaCu1kE0jyfZV1GoqxBGSqRaUWSVkQz1e9W1iP9jKQtxLcxXi4MvoTkYGI8pfZ"/>
+<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-surface-container-lowest"></span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg font-semibold text-on-surface">Dog Hat</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">Hôm nay thời tiết mát mẻ thật 🌤️</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">09:36</span>
+<span class="w-5 h-5 rounded-full bg-primary-container text-on-primary text-[11px] font-bold flex items-center justify-center">2</span>
+</div>
+</div>
+</div>
+<!-- All Chats Section -->
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold px-2 pt-2">Gần đây</span>
+<div class="flex items-center justify-between p-3 rounded-2xl hover:bg-surface-container-low text-on-surface cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover" alt="Ảnh đại diện một quản lý cấp cao tên Cute Turtle với trang phục lịch lãm" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMpnSN8PuVv9Rfd0DVKd7-OFKMNJ1clRjdLcHU69yJIQ8CDzVmT42faAMZOf3FS2nnjLj2DeRRQq1ja4R6ZYnuGd7ZCd0ZvhSevUXHYqpWX8BIiB1udkqntSCh949ZOSP50JjzOu1842u30TY88oJ9TDsmXzu5om7yRF25NsKmIWO18tqpC73JY3y5CBXyGHmctnVXc2WRECyqgdzZ-jCBYex-DqBjYnW3XGihtM8Ppc_jD3HjpHCf"/>
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg font-medium text-on-surface">Cute Turtle</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">Đồng ý với phương án đó nhé!</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">08:12</span>
+</div>
+<div class="flex items-center justify-between p-3 rounded-2xl hover:bg-surface-container-low text-on-surface cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover" alt="Ảnh đại diện thành viên nhóm Cool spirit phong cách sáng tạo nghệ thuật" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAqYrNe3tgoSKq9BWB7tVZKe0VO1nrrIhm9rYwqAr3IscLWrNnY1lzGb1frMFrUGL_lo37eHGI1_te5zMf2enAhp-rE-QtO35mpZdkrhXxiG53f70yM62oeIVXKAinfkuk6UifcX-Q1pW2rdH7vatbhkfDDBb2Ys-8UlPNdeE_lTRLgqOBppzJvWaoyLsXQYKzPeZNOF3-kCNXfCkGOLA1QjNY7P7viEWEnNiy3yUPwigt6LWr5dfI"/>
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg font-medium text-on-surface">Cool Spirit</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">Xem video demo mới nhất chưa?</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Hôm qua</span>
+</div>
+</div>
+</div>
+<!-- Right Conversation Area -->
+<div class="col-span-12 sm:col-span-7 md:col-span-7 lg:col-span-7 bg-surface p-5 flex flex-col justify-between relative">
+<!-- Chat Conversation Header -->
+<div class="flex items-center justify-between pb-4">
+<div class="flex items-center gap-3">
+<div class="relative">
+<img class="w-10 h-10 rounded-full object-cover" alt="Ảnh đại diện chân dung Minh Anh phóng to rõ ràng trong phần đầu cửa sổ chat" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMtpbhFJfKSV4zzJA5IHEZrTe2Pxm9Rl1N0DTk2gVFpBWkLEHGFlFOGse_EdPIh8vqveyk6KwbrThRt9FRAn0WPzqawQCrg1bhszKbkJ47V4KcmN_XMYNcnjwOXGik8o_5A69al3EoxkkEfzjugWQfPVUZ5to8cBOdsqzVTlf2IyAKBUux-18Bkw5vL0AlSiHD2jMZ-ARCniijqAPyyUCjTEN1iFutXSHjnueUrzXIK5qcaVHMmfS2"/>
+<span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-surface"></span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface font-bold leading-none">Minh Anh</h4>
+<span class="font-label-sm text-label-sm text-emerald-600 font-medium">Đang hoạt động</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl hover:bg-surface-container-high flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">videocam</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl hover:bg-surface-container-high flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">call</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl hover:bg-surface-container-high flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl hover:bg-surface-container-high flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Floating Video Call Pip Overlay (Domain highlight inspired by image 2) -->
+<div class="hidden lg:block absolute top-16 right-5 w-60 rounded-2xl overflow-hidden shadow-2xl bg-surface-container-highest z-20 transition-all hover:scale-[1.02] cursor-pointer">
+<div class="relative h-44 bg-surface-dim">
+<img class="w-full h-full object-cover" alt="Một phụ nữ trẻ đang gọi video call trò chuyện trực tuyến vui vẻ với hình nền thiên nhiên mờ ảo" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1lM1h0bQA-ezafrKtoGGh5uj9B7A8fpXok_IATTT0fibZ1IOWeZ1PDWGtsHOT0SmyefjKXMaYoyF37soEZXOQahj9GSdB-GC86aE4yw8zbYwD41jdMteRtTVRHqU2G8EWOAjyzcD7p5a9YxCiDN1LmDnYCiHNe55xj4Q8fzpPxsgq8HUGqlUynxdbuXC5Niu4FKPfkzCp0S4TZJP3Uyi84J-znD5-58RSX-4VaS1Pypp_Mn7FG-jZ"/>
+<!-- Small Inset User Video -->
+<div class="absolute top-2.5 right-2.5 w-16 h-20 rounded-xl overflow-hidden ring-2 ring-white shadow-md">
+<img class="w-full h-full object-cover" alt="Góc nhìn camera thu nhỏ của người gọi với kính cận mỉm cười tự tin" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrwxx38pnM85dRXGI3PtvNEBSVQikJ-w_9Ps5moIcwEmtoYR9r1dQlBvoTvSS7raVql__3rEyLfHYj7025pEZ1Nu0codTLaM2d-VNr7i_XUsxLGXzTRA7OVJ2tApvzrEfNnfPGLr4LOHoskyYwiRU2bJOqC_80-tylyjGKPUCDWtdL1GOjjAE0jL7G2FLH_Z-5Hrj_gwk0AK55aQnoUiEQ5bloH5pHwXmu-S9khp3GxZ9_HUr7dbsb"/>
+</div>
+<!-- Call control bubble -->
+<div class="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md">
+<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+<span class="font-label-sm text-label-sm text-white font-medium">Gọi video · Minh họa</span>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 ml-1">
+<span class="material-symbols-outlined text-[14px]">call_end</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Message Stream Mockup -->
+<div class="flex flex-col gap-4 py-4 overflow-hidden">
+<div class="flex justify-center">
+<span class="px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm">Hôm nay</span>
+</div>
+<!-- Message: Received -->
+<div class="flex items-end gap-2 max-w-[80%]">
+<div class="bg-surface-container-lowest text-on-surface px-4 py-2.5 rounded-2xl rounded-bl-xs shadow-sm font-body-sm text-body-sm">
+                  Chiều nay nhóm mình cùng ôn bài nhé? 👋
+                  <div class="text-right font-label-sm text-label-sm text-on-surface-variant pt-1">09:12</div>
+</div>
+</div>
+<!-- Message: Sent -->
+<div class="flex items-end justify-end gap-2 max-w-[80%] ml-auto">
+<div class="bg-primary-container text-on-primary px-4 py-2.5 rounded-2xl rounded-br-xs shadow-sm font-body-sm text-body-sm">
+                  Được chứ! Mình gửi tài liệu cho bạn trước nhé.
+                  <div class="text-right font-label-sm text-label-sm text-on-primary/70 pt-1">09:14 ✓✓</div>
+</div>
+</div>
+<!-- Message: Sent media -->
+<div class="flex flex-col items-end gap-1 max-w-[70%] ml-auto">
+<div class="rounded-2xl overflow-hidden shadow-sm p-1 bg-primary-container text-on-primary">
+<div class="w-64 h-36 rounded-xl overflow-hidden relative">
+<img class="w-full h-full object-cover" alt="Một tác phẩm đồ họa trừu tượng công nghệ 3D với dải ánh sáng xanh neon uốn lượn sâu thẳm tuyệt đẹp" loading="lazy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAV5c6LzOXD9rjKGn2988baivwmqWjP3sEL1d0ix8JaEbKqzXZP2lq6uLPNmLQhRieO2swIyiEDnatexQ7s3W5owLHCi7G4IvHnv2fbHevf0eHZpdQzFbty2fNGVlPVw9NtmBfHkU_Qu0C7JmxiBUs3aJsGmlFEel01bJG9iXManm3mv2_TFnWUJiJkXrXZ6aknVJCkfY16dhIGSaROFgy_kIPmcm_icalG-oA-ZGyr2zdtcl3dTTLs"/>
+</div>
+<div class="flex items-center justify-between px-2 py-1 font-label-sm text-label-sm text-on-primary/80">
+<span class="flex items-center gap-1">
+<span class="text-amber-300">Ảnh chia sẻ</span>
+                    </span>
+<span>10:35</span>
+</div>
+</div>
+</div>
+<!-- Message: File attachment -->
+<div class="flex items-end gap-2 max-w-[80%]">
+<div class="bg-surface-container-lowest p-3 rounded-2xl rounded-bl-xs shadow-sm flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">description</span>
+</div>
+<div class="flex flex-col pr-4">
+<span class="font-label-lg text-label-lg font-semibold text-on-surface">Tai_lieu_on_tap.pdf</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">2.4 MB · Tài liệu PDF</span>
+</div>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-8 h-8 rounded-full bg-surface-container-low hover:bg-primary hover:text-white flex items-center justify-center text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Chat Input Box -->
+<div class="w-full pt-2">
+<div class="flex items-center gap-2 p-2 rounded-2xl bg-surface-container-lowest shadow-sm">
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">attach_file</span>
+</button>
+<input class="flex-1 bg-transparent px-2 font-body-sm text-body-sm text-on-surface focus:outline-none" placeholder="Nhập tin nhắn..." type="text" value="Cảm ơn nhé! Đã nhận được file rồi." readonly tabindex="-1" aria-label="Nội dung minh họa"/>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-9 h-9 rounded-xl text-on-surface-variant hover:text-amber-500 hover:bg-surface-container-low flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">sentiment_satisfied</span>
+</button>
+<button type="button" disabled aria-label="Điều khiển trong hình minh họa" class="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shadow-[0_4px_12px_rgba(37,99,235,0.3)] hover:bg-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="mt-5 text-xs text-on-surface-variant">Hình minh họa chat và cuộc gọi; dữ liệu mẫu, chưa kết nối tài khoản thật.</figcaption></figure></div></section><section id="features" class="py-20 lg:py-24"><div class="max-w-[1200px] mx-auto px-6 lg:px-12"><div class="text-center max-w-2xl mx-auto mb-12"><span class="text-xs font-bold tracking-widest text-primary">KẾT NỐI THEO CÁCH CỦA BẠN</span><h2 class="text-3xl sm:text-4xl font-bold tracking-tight mt-4">Những điều cần cho một cuộc trò chuyện trọn vẹn</h2><p class="mt-5 text-on-surface-variant leading-7">Các tính năng trong kế hoạch sản phẩm S-Call, dành cho liên lạc cá nhân và trao đổi trong nhóm.</p></div><div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5"><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">chat</span></span><h3 class="font-bold text-xl mb-3">Nhắn tin cá nhân</h3><p class="text-on-surface-variant leading-7 text-sm">Gửi tin nhắn cho bạn bè, xem lịch sử trò chuyện và theo dõi trạng thái đã xem.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Một lời chào, mở đầu câu chuyện.</p></article><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">videocam</span></span><h3 class="font-bold text-xl mb-3">Gọi thoại & video</h3><p class="text-on-surface-variant leading-7 text-sm">Bắt đầu cuộc gọi thoại hoặc video với người bạn muốn trò chuyện ngay từ hội thoại.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Nghe giọng quen, thấy nhau gần.</p></article><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">groups</span></span><h3 class="font-bold text-xl mb-3">Trò chuyện nhóm</h3><p class="text-on-surface-variant leading-7 text-sm">Tạo nhóm, thêm bạn bè và cùng trao đổi trong một không gian chung.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Bạn bè, lớp học, nhóm học tập.</p></article><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">attach_file</span></span><h3 class="font-bold text-xl mb-3">Chia sẻ ảnh & tài liệu</h3><p class="text-on-surface-variant leading-7 text-sm">Gửi hình ảnh và tệp đính kèm để câu chuyện có thêm những điều cần chia sẻ.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Từ tấm ảnh đến tài liệu ôn bài.</p></article><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">person_add</span></span><h3 class="font-bold text-xl mb-3">Tìm kiếm & kết bạn</h3><p class="text-on-surface-variant leading-7 text-sm">Tìm người dùng bằng email hoặc tên tài khoản, gửi và quản lý lời mời kết bạn.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Tìm đúng người, kết nối dễ dàng.</p></article><article class="rounded-3xl p-7 bg-white border border-primary/5 shadow-sm hover:shadow-lg transition-shadow"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed/60 text-primary mb-6"><span class="material-symbols-outlined" aria-hidden="true">lock</span></span><h3 class="font-bold text-xl mb-3">Khóa trò chuyện bằng PIN</h3><p class="text-on-surface-variant leading-7 text-sm">Thêm bước mở khóa bằng mã PIN cho cuộc trò chuyện bạn muốn giữ riêng tư.</p><p class="mt-6 pt-4 border-t border-primary/5 text-xs text-primary font-semibold">Chủ động với không gian của mình.</p></article></div></div></section>
+<section id="how-it-works" class="py-20 bg-white"><div class="max-w-[1200px] mx-auto px-6 lg:px-12"><div class="text-center"><span class="text-xs tracking-widest font-bold text-primary">CÁCH SỬ DỤNG</span><h2 class="text-3xl sm:text-4xl font-bold mt-4">Từ lời chào đầu tiên, chỉ ba bước</h2><p class="mt-4 text-on-surface-variant">Luồng sử dụng dự kiến khi các chức năng được hoàn thiện.</p></div><ol class="grid md:grid-cols-3 gap-8 mt-12"><li class="p-6 rounded-3xl bg-surface-container-low/60"><span class="grid h-11 w-11 place-items-center rounded-full bg-primary-container text-white font-bold">01</span><h3 class="text-xl font-bold mt-5">Tạo tài khoản</h3><p class="text-sm text-on-surface-variant leading-7 mt-3">Đăng ký tài khoản S-Call và bổ sung tên hiển thị, ảnh đại diện của bạn.</p></li><li class="p-6 rounded-3xl bg-surface-container-low/60"><span class="grid h-11 w-11 place-items-center rounded-full bg-primary-container text-white font-bold">02</span><h3 class="text-xl font-bold mt-5">Tìm và kết bạn</h3><p class="text-sm text-on-surface-variant leading-7 mt-3">Tìm bạn bè qua email hoặc tên tài khoản, sau đó gửi lời mời kết bạn.</p></li><li class="p-6 rounded-3xl bg-surface-container-low/60"><span class="grid h-11 w-11 place-items-center rounded-full bg-primary-container text-white font-bold">03</span><h3 class="text-xl font-bold mt-5">Bắt đầu trò chuyện</h3><p class="text-sm text-on-surface-variant leading-7 mt-3">Nhắn tin, chia sẻ tài liệu hoặc bắt đầu cuộc gọi với bạn bè.</p></li></ol></div></section>
+<section id="privacy" class="py-20 lg:py-24"><div class="max-w-[1200px] mx-auto px-6 lg:px-12 grid lg:grid-cols-2 gap-12 items-center"><div><span class="text-xs text-primary font-bold tracking-widest">KHÔNG GIAN RIÊNG CỦA BẠN</span><h2 class="text-3xl sm:text-4xl font-bold mt-4 leading-tight">Gần gũi khi trò chuyện.<br/>Chủ động với riêng tư.</h2><p class="mt-5 text-on-surface-variant leading-7">S-Call được thiết kế với các lựa chọn giúp bạn quản lý cuộc trò chuyện và người có thể liên lạc với mình.</p><ul class="space-y-5 mt-7"><li class="flex gap-3"><span class="material-symbols-outlined" aria-hidden="true">pin</span><div><h3 class="font-semibold">Khóa hội thoại bằng PIN</h3><p class="mt-1 text-sm text-on-surface-variant">Thêm bước xác nhận trước khi mở hội thoại đã khóa.</p></div></li><li class="flex gap-3"><span class="material-symbols-outlined" aria-hidden="true">block</span><div><h3 class="font-semibold">Chặn và bỏ chặn người dùng</h3><p class="mt-1 text-sm text-on-surface-variant">Quản lý các liên hệ bạn không muốn tương tác.</p></div></li><li class="flex gap-3"><span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span><div><h3 class="font-semibold">Quản lý tài khoản cá nhân</h3><p class="mt-1 text-sm text-on-surface-variant">Cập nhật hồ sơ, đổi mật khẩu và đăng xuất khỏi các thiết bị.</p></div></li></ul></div>
+<div class="bg-gradient-to-br from-primary-fixed to-surface-container-low rounded-3xl p-7 sm:p-12"><div class="bg-white rounded-3xl p-8 shadow-xl text-center max-w-sm mx-auto"><span class="mx-auto grid h-16 w-16 place-items-center bg-primary-fixed/60 text-primary rounded-2xl"><span class="material-symbols-outlined" aria-hidden="true">lock</span></span><h3 class="font-bold text-xl mt-5">Cuộc trò chuyện đã khóa</h3><p class="text-sm text-on-surface-variant mt-3">Nhập mã PIN để mở cuộc trò chuyện.</p><div aria-label="Mã PIN được ẩn trong hình minh họa" class="flex justify-center gap-2 mt-7"><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span><span class="w-9 h-12 grid place-items-center bg-surface-container-low rounded-xl text-xl">•</span></div><p class="text-xs text-on-surface-variant mt-6">Minh họa chức năng khóa hội thoại</p></div></div></div></section>
+<section id="faq" class="bg-white py-20"><div class="max-w-3xl mx-auto px-6"><div class="text-center mb-10"><span class="text-xs text-primary font-bold tracking-widest">BẠN MUỐN BIẾT THÊM?</span><h2 class="mt-4 text-3xl sm:text-4xl font-bold">Câu hỏi thường gặp</h2></div><details class="border-b border-primary/10 py-5"><summary class="font-semibold leading-7 pr-4">S-Call hiện đã sử dụng được chưa?</summary><p class="text-sm leading-7 text-on-surface-variant mt-3">Đây là bản xem trước thiết kế landing page. Các chức năng tài khoản, nhắn tin và gọi điện đang được phát triển; khung chat trên trang sử dụng dữ liệu minh họa.</p></details><details class="border-b border-primary/10 py-5"><summary class="font-semibold leading-7 pr-4">Có cần tải ứng dụng để sử dụng S-Call không?</summary><p class="text-sm leading-7 text-on-surface-variant mt-3">S-Call được định hướng là ứng dụng web, truy cập qua trình duyệt. Trang này không cung cấp bản cài đặt Windows, macOS, Android hoặc iOS.</p></details><details class="border-b border-primary/10 py-5"><summary class="font-semibold leading-7 pr-4">S-Call có những kiểu trò chuyện nào?</summary><p class="text-sm leading-7 text-on-surface-variant mt-3">Theo đặc tả sản phẩm, S-Call hỗ trợ hội thoại cá nhân và nhóm; cuộc gọi thoại/video được giới thiệu cho liên lạc cá nhân.</p></details><details class="border-b border-primary/10 py-5"><summary class="font-semibold leading-7 pr-4">Khóa bằng PIN có phải mã hóa đầu cuối không?</summary><p class="text-sm leading-7 text-on-surface-variant mt-3">Khóa PIN bổ sung bước xác nhận khi mở hội thoại. Đây không phải cam kết mã hóa đầu cuối; bản thiết kế này không đưa ra tuyên bố đó.</p></details><details class="border-b border-primary/10 py-5"><summary class="font-semibold leading-7 pr-4">Tôi có thể tìm bạn bằng cách nào?</summary><p class="text-sm leading-7 text-on-surface-variant mt-3">Luồng dự kiến cho phép tìm người dùng qua email hoặc tên tài khoản, gửi lời mời kết bạn và bắt đầu trò chuyện sau khi được chấp nhận.</p></details></div></section>
+<section id="start" class="py-20"><div class="max-w-[1104px] mx-6 lg:mx-auto p-8 sm:p-14 rounded-3xl text-center bg-gradient-to-tr from-primary via-primary-container to-tertiary-container text-white"><span class="text-xs font-semibold tracking-widest text-white/80">MỖI KẾT NỐI BẮT ĐẦU TỪ MỘT LỜI CHÀO</span><h2 class="text-3xl sm:text-4xl font-bold mt-5">Một lời nhắn. Thêm một chút gần nhau.</h2><p class="max-w-xl mx-auto mt-5 leading-7 text-white/85">Khám phá không gian trò chuyện S-Call, từ tin nhắn hằng ngày đến những cuộc gọi với người bạn quý mến.</p><div class="mt-8 flex flex-wrap justify-center gap-3"><button type="button" data-auth="register" class="bg-white text-primary rounded-full px-7 py-3.5 font-semibold">Tạo tài khoản <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button><a href="#demo" class="px-7 py-3.5 rounded-full border border-white/40 font-semibold hover:bg-white/10">Xem giao diện</a></div><p class="mt-5 text-xs text-white/80">Đăng ký và đăng nhập sẽ khả dụng khi hệ thống tài khoản được hoàn thiện.</p></div></section></main>
+<footer class="bg-white border-t border-primary/5"><div class="max-w-[1200px] mx-auto px-6 lg:px-12 py-10 flex flex-col sm:flex-row justify-between gap-7"><div><a href="#home" class="flex items-center gap-3 font-bold text-xl tracking-tight"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-container text-white"><span class="material-symbols-outlined" aria-hidden="true">forum</span></span>S-Call</a><p class="mt-4 text-sm text-on-surface-variant">Một không gian nhỏ để giữ mọi người gần nhau hơn.</p></div><nav aria-label="Điều hướng cuối trang" class="flex flex-wrap gap-5 text-sm text-on-surface-variant self-start"><a href="#features">Tính năng</a><a href="#privacy">Quyền riêng tư</a><a href="#faq">Câu hỏi thường gặp</a></nav></div><div class="max-w-[1200px] mx-auto px-6 lg:px-12 py-6 border-t border-primary/5 flex flex-wrap justify-between gap-3 text-xs text-on-surface-variant"><span>© 2026 S-Call</span><span>Bản xem trước thiết kế · Tiếng Việt</span></div></footer>
+<dialog id="auth-preview" aria-labelledby="auth-title" aria-describedby="auth-description"><form method="dialog"><div class="flex justify-between items-center gap-4"><h2 id="auth-title" class="font-bold text-xl">Tài khoản S-Call</h2><button autofocus aria-label="Đóng thông báo" class="rounded-full bg-surface-container-low h-9 w-9">✕</button></div><p id="auth-description" class="mt-5 text-sm leading-7 text-on-surface-variant">Đây là bản xem trước thiết kế. Chức năng tài khoản đang được phát triển, chưa tiếp nhận thông tin đăng ký hoặc đăng nhập.</p><button class="mt-6 px-5 py-3 rounded-full bg-primary-container text-white text-sm font-semibold">Đã hiểu</button></form></dialog>
+<script>
+const authDialog = document.getElementById('auth-preview');
+document.querySelectorAll('[data-auth]').forEach(button => button.addEventListener('click', () => {
+  document.getElementById('auth-title').textContent = button.dataset.auth === 'login' ? 'Đăng nhập S-Call' : 'Đăng ký S-Call';
+  authDialog.showModal();
+}));
+document.querySelectorAll('nav a').forEach(link => link.addEventListener('click', () => {
+  const menu = link.closest('details');
+  if (menu) menu.open = false;
+}));
+authDialog.addEventListener('click', event => { if (event.target === authDialog) { const rect = authDialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) authDialog.close(); } });
+</script></body></html>

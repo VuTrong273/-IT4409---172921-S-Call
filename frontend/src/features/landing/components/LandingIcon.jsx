@@ -5,6 +5,7 @@ const paths = {
   phone: <path d="m7 3 3 5-3 3a14 14 0 0 0 6 6l3-3 5 3-2 4C10 21 3 14 3 5Z" />,
   lock: <><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
   file: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6M8 13h8M8 17h5" /></>,
+  media: <><path d="M8 3h10a2 2 0 0 1 2 2v10M4 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" /><circle cx="6.5" cy="11.5" r="1" /><path d="m3 18 4-4 3 3 2-2 4 4" /></>,
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   send: <><path d="m21 3-7 18-4-7-7-4Z" /><path d="m10 14 5-5" /></>,
