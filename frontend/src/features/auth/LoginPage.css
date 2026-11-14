@@ -1,0 +1,31 @@
+@reference "../../index.css";
+
+.login-layout { @apply grid flex-1 lg:grid-cols-2 xl:grid-cols-[1.6fr_1fr]; }
+.login-brand-panel { @apply hidden min-h-full flex-col border-r border-outline-variant/60 bg-white p-8 text-on-surface lg:flex xl:p-10; }
+.login-brand-logo { @apply inline-flex w-fit items-center gap-3 text-xl font-semibold; }
+.login-brand-logo img { width: 3rem; height: 3rem; }
+.login-brand-content { @apply my-auto grid items-center gap-4 py-10 xl:grid-cols-[0.85fr_1.35fr] xl:gap-0; }
+.login-brand-title { @apply max-w-lg text-4xl font-semibold leading-[1.15] tracking-tight xl:relative xl:z-10 xl:text-[clamp(2.5rem,3.2vw,3.75rem)]; }
+.login-brand-title span { color: var(--color-primary-container); }
+.login-brand-image { @apply mx-auto w-full max-w-[620px] object-contain; }
+.login-form-panel { @apply flex min-h-[calc(100svh-85px)] flex-col px-5 py-6 sm:px-8 xl:px-12; }
+.login-topbar { @apply flex items-center justify-between lg:justify-end; }
+.login-mobile-logo { @apply flex items-center gap-2 text-sm font-bold text-on-surface lg:hidden; }
+.login-mobile-logo img { width: 2rem; height: 2rem; }
+.login-home-link { @apply inline-flex min-h-10 items-center gap-2 rounded-full border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-secondary transition hover:border-primary-container hover:bg-primary-fixed/50 hover:text-primary; }
+.login-form-content { @apply m-auto w-full max-w-[620px] py-10; }
+.login-title { @apply text-xl font-semibold tracking-tight text-on-surface; }
+.login-form-body { margin-top: 1.5rem; }
+.login-form { @apply space-y-3; }
+.login-submit { margin-top: 1.5rem; }
+.login-forgot-password { @apply mt-4 text-center; }
+.login-forgot-password button { @apply min-h-11 rounded-lg px-3 text-sm text-on-surface transition hover:text-primary; }
+.login-register-link { margin-top: 3rem; }
+
+@keyframes auth-image-enter {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .auth-image-enter { animation: auth-image-enter 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+}

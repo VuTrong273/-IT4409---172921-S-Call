@@ -1,0 +1,22 @@
+@reference "../../index.css";
+
+/* Shared form controls and footer for login and registration. */
+.auth-page { @apply flex min-h-screen flex-col bg-white; }
+.auth-visually-hidden { @apply sr-only; }
+.auth-label { @apply mb-2 block text-sm font-medium text-on-surface-variant; }
+.auth-input { @apply w-full h-[52px] rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm text-on-surface transition-colors placeholder:text-secondary; }
+.auth-input:focus, .auth-input:focus-visible { border-color: var(--color-primary-container); outline: none; box-shadow: none; }
+.auth-input::-ms-reveal, .auth-input::-ms-clear { display: none; }
+.auth-password-control { position: relative; }
+.auth-password-input { padding-right: 3.5rem; }
+.auth-password-toggle { @apply absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-lg text-secondary transition hover:bg-primary-fixed hover:text-primary focus-visible:outline-2 focus-visible:outline-primary-container; }
+.auth-field-error { @apply mt-1.5 text-xs text-error; }
+.auth-field-hint { @apply mt-1.5 text-xs leading-5 text-secondary; }
+.auth-password-hint { @apply text-xs leading-5 text-secondary; }
+.auth-error { @apply rounded-xl border border-error/20 bg-error-container px-4 py-3 text-sm leading-5 text-on-error-container; }
+.auth-button { @apply flex h-11 w-full items-center justify-center rounded-full px-4 text-sm font-medium transition; }
+.auth-button-primary { @apply bg-primary-container text-white hover:bg-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary-container disabled:cursor-wait disabled:opacity-60; }
+.auth-button-outline { @apply border border-primary-container text-primary hover:bg-primary-fixed; }
+.auth-button-secondary { @apply bg-surface-container-low text-on-surface hover:bg-surface-container; }
+.auth-footer { @apply border-t border-outline-variant/40 bg-surface-container-low; }
+.auth-footer-inner { @apply flex min-h-[84px] w-full items-center justify-between gap-4 px-5 py-4 text-xs text-secondary sm:px-8 xl:px-10; }

@@ -1,0 +1,8 @@
+@reference "../index.css";
+
+.language-select { @apply relative shrink-0; }
+.language-select-trigger { @apply inline-flex min-h-11 items-center justify-between gap-2 bg-transparent py-2.5 text-sm text-secondary transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container; }
+.language-select-menu { @apply absolute bottom-full right-0 z-[70] mb-2 w-full min-w-[148px] rounded-xl border border-outline-variant/60 bg-white p-1.5 shadow-lg shadow-slate-900/10; }
+.language-select-chevron.is-open { transform: rotate(180deg); }
+.language-select-option { @apply flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-on-surface outline-none hover:bg-primary-fixed/60 focus:bg-primary-fixed; }
+.language-select-option[aria-checked="true"] { @apply bg-primary-fixed/60 font-medium text-primary; }

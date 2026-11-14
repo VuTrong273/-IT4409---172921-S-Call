@@ -1,3 +1,4 @@
+import './LandingIcon.css';
 const paths = {
   arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
   chat: <><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-1 2V11.5a8.5 8.5 0 0 1 17 0Z" /><path d="M7 10h9M7 14h6" /></>,
@@ -16,6 +17,6 @@ const paths = {
   users: <><circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3" /></>,
 };
 
-export default function LandingIcon({ name, className = 'h-5 w-5' }) {
+export default function LandingIcon({ name, className = 'landing-icon' }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

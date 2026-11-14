@@ -1,0 +1,12 @@
+@reference "../../index.css";
+
+.register-main { @apply flex-1 px-5 pb-12 pt-8 sm:px-8 sm:pt-10; }
+.register-content { @apply mx-auto w-full max-w-[640px]; }
+.register-back-link { @apply -ml-2 mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg text-secondary transition hover:bg-surface-container-low hover:text-primary; }
+.register-logo { @apply mb-4 flex w-fit items-center gap-2 text-lg font-semibold text-on-surface; }
+.register-logo img { width: 2rem; height: 2rem; }
+.register-title { @apply text-2xl font-semibold leading-tight tracking-tight text-on-surface sm:text-3xl; }
+.register-description { @apply mt-2 text-sm leading-6 text-secondary; }
+.register-form-body { margin-top: 1.75rem; }
+.register-form { @apply space-y-5; }
+.register-submit, .register-login-link { margin-top: .75rem; }

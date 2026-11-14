@@ -1,0 +1,44 @@
+@reference "../../../index.css";
+
+.preview { @apply mx-auto w-full min-w-0 text-left; }
+.preview-window { @apply overflow-hidden rounded-2xl border border-outline-variant/40 bg-white shadow-[0_12px_36px_-18px_rgba(40,65,115,0.16)]; }
+.preview-layout { @apply flex min-h-[450px]; }
+.preview-sidebar { @apply hidden w-[240px] shrink-0 flex-col border-r border-outline-variant/30 bg-surface-container-low p-3 md:flex lg:hidden xl:flex; }
+.preview-list-heading { @apply flex items-center justify-between; }
+.preview-list-title { @apply text-lg font-semibold; }
+.preview-accent { @apply text-primary; }
+.preview-search { @apply my-5 flex items-center gap-2 rounded-xl bg-surface-container-low px-3 py-2.5 text-xs text-secondary; }
+.preview-icon-small { @apply h-4 w-4; }
+.preview-conversations { @apply space-y-1; }
+.preview-conversation-copy { @apply min-w-0 flex-1; }
+.preview-conversation-heading { @apply flex items-center justify-between gap-1; }
+.preview-contact-name { @apply truncate text-[13px] font-semibold; }
+.preview-contact-time { @apply shrink-0 text-[10px] text-secondary; }
+.preview-contact-message { @apply mt-1 truncate text-xs text-secondary; }
+.preview-main { @apply flex min-w-0 flex-1 flex-col; }
+.preview-header { @apply flex items-center justify-between gap-2 border-b border-outline-variant/30 p-4 sm:px-6; }
+.preview-recipient { @apply flex items-center gap-3; }
+.preview-recipient-avatar { @apply grid h-10 w-10 place-items-center rounded-full bg-secondary-container text-xs font-semibold text-on-secondary-fixed; }
+.preview-recipient-name { @apply text-sm font-semibold; }
+.preview-status { @apply mt-0.5 flex items-center gap-1.5 text-xs text-secondary; }
+.preview-status-dot { @apply h-1.5 w-1.5 rounded-full bg-emerald-500; }
+.preview-call-actions { @apply flex gap-3 text-primary; }
+.preview-messages { @apply flex flex-1 flex-col gap-4 bg-surface-container-low/50 p-4 sm:px-6 sm:py-5; }
+.preview-day { @apply self-center text-[11px] text-secondary; }
+.preview-incoming { @apply max-w-[85%] self-start rounded-xl rounded-bl-sm border border-outline-variant/20 bg-white px-4 py-3 text-[13px] leading-6 sm:max-w-[75%] sm:text-sm; }
+.preview-message-time { @apply mt-1 block text-[10px] leading-4 text-secondary; }
+.preview-file { @apply flex max-w-full items-center gap-3 self-start rounded-xl rounded-bl-sm border border-outline-variant/20 bg-white p-3; }
+.preview-file-icon { @apply rounded-xl bg-primary-fixed p-2.5 text-primary; }
+.preview-file-copy { @apply min-w-0; }
+.preview-file-meta { @apply mt-1 text-[11px] text-secondary; }
+.preview-outgoing { @apply max-w-[85%] self-end rounded-xl rounded-br-sm bg-primary-container px-4 py-3 text-[13px] leading-6 text-white sm:max-w-[75%] sm:text-sm; }
+.preview-outgoing-time { @apply mt-1 block text-right text-[10px] leading-4 text-white/80; }
+.preview-composer { @apply border-t border-outline-variant/20 bg-white p-3 sm:px-5; }
+.preview-compose-field { @apply flex items-center gap-3 rounded-2xl bg-surface-container-low px-3 py-3 text-secondary; }
+.preview-compose-placeholder { @apply flex-1 text-[13px]; }
+.preview-caption { @apply mt-4 text-center text-xs leading-5 text-secondary; }
+.preview-conversation { @apply flex gap-3 rounded-2xl p-3; }
+.preview-conversation.is-active { @apply bg-primary-fixed/60; }
+.preview-avatar { @apply grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-container text-xs font-semibold text-white; }
+.preview-avatar-group { @apply bg-tertiary-fixed text-on-tertiary-fixed; }
+.preview-avatar-friend { @apply bg-secondary-container text-on-secondary-fixed; }

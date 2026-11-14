@@ -58,7 +58,8 @@ body { margin: 0; background: var(--color-surface); color: var(--color-on-surfac
 ::selection { background: var(--color-primary-fixed); color: var(--color-on-primary-fixed); }
 
 .landing-page,
-.auth-login {
+.auth-login,
+.auth-register {
   --color-surface: #ffffff;
   --color-surface-container-low: #f5f7fc;
   --color-surface-container: #edf2fc;
@@ -70,40 +71,3 @@ body { margin: 0; background: var(--color-surface); color: var(--color-on-surfac
   --color-primary-fixed: #e7eeff;
   --color-outline-variant: #dce3ef;
 }
-
-.landing-hero { background: #f8faff; }
-
-.auth-login input::-ms-reveal,
-.auth-login input::-ms-clear { display: none; }
-
-.auth-login .login-input:focus,
-.auth-login .login-input:focus-visible {
-  border-color: var(--color-primary-container);
-  outline: none;
-  box-shadow: none;
-}
-
-.landing-container {
-  width: 100%;
-  max-width: 1600px;
-  margin-inline: auto;
-  padding-inline: clamp(1.25rem, 4vw, 4rem);
-}
-
-.landing-anchor,
-.landing-page #home,
-#landing-main {
-  scroll-margin-top: 6.5rem;
-}
-
-.landing-page summary::-webkit-details-marker { display: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-page *,
-  .landing-page *::before,
-  .landing-page *::after {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-

@@ -1,71 +1,96 @@
+import { useNavigate } from 'react-router';
+import { WORKSPACE_PATHS } from '../../app/workspaceRoutes.js';
+import FriendsWorkspace from '../friends/FriendsWorkspace.jsx';
+import useFriends from '../friends/hooks/useFriends.js';
+import SettingsWorkspace from '../settings/SettingsWorkspace.jsx';
+import useProfile from '../settings/hooks/useProfile.js';
 import { useEffect, useState } from 'react';
-import { api } from '../../lib/api.js';
+import useConversations from './hooks/useConversations.js';
+import ChatSidebar from './components/ChatSidebar.jsx';
+import ConversationList from './components/ConversationList.jsx';
+import ChatHeader from './components/ChatHeader.jsx';
+import MessageList from './components/MessageList.jsx';
+import MessageComposer from './components/MessageComposer.jsx';
+import ConversationDetails from './components/ConversationDetails.jsx';
+import NewConversationDialog from './components/NewConversationDialog.jsx';
+import './ConversationWorkspace.css';
 
-// Khung giao diện theo PRD: 2 cột trên máy tính (trái: danh sách hội thoại, phải: khung chat / màn hình gọi),
-// thu gọn thành 1 cột trên điện thoại (chuyển qua lại giữa danh sách và màn hình chat).
-// Đây chỉ là template để kiểm tra kết nối hệ thống; thay thế bằng các giao diện thật sau.
+export default function ConversationWorkspace({ tab }) {
+  const navigate = useNavigate();
+  const chat = useConversations();
+  const friends = useFriends();
+  const { profile, saveProfile } = useProfile();
+  const [filter, setFilter] = useState('');
+  const [archived, setArchived] = useState(false);
+  const [mobileChat, setMobileChat] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [messageSearch, setMessageSearch] = useState('');
+  const [notice, setNotice] = useState('');
+  const [newChat, setNewChat] = useState(false);
 
-function useHealth() {
-  const [health, setHealth] = useState({ loading: true });
   useEffect(() => {
-    api('/health')
-      .then((data) => setHealth({ ok: true, data }))
-      .catch((err) => setHealth({ ok: false, error: err.message }));
-  }, []);
-  return health;
-}
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
-function StatusBadge({ health }) {
-  if (health.loading) return <span className="text-sm text-secondary">Đang kiểm tra hệ thống ...</span>;
-  const ok = health.ok && health.data.status === 'ok';
-  return (
-    <span className={`inline-flex items-center gap-2 text-sm ${ok ? 'text-green-600' : 'text-error'}`}>
-      <span className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-error'}`} />
-      {ok
-        ? `API ${health.data.status} · DB ${health.data.database} · MinIO ${health.data.storage}`
-        : `Không kết nối được backend (${health.error ?? health.data?.status})`}
-    </span>
-  );
-}
+  useEffect(() => {
+    setFilter('');
+    setSearchOpen(false);
+    setMessageSearch('');
+    setDetailsOpen(false);
+    setNewChat(false);
+  }, [tab]);
 
-export default function App() {
-  const health = useHealth();
-  const [chatOpen, setChatOpen] = useState(false); // chỉ dùng trên mobile
+  function selectConversation(person) {
+    chat.selectConversation(person);
+    setMobileChat(true);
+    if (tab !== 'chat') navigate(WORKSPACE_PATHS.chat);
+    setArchived(!!person.archived);
+    setSearchOpen(false);
+    setMessageSearch('');
+    setDetailsOpen(false);
+    setNewChat(false);
+  }
+  function changeTab() {
+    setFilter('');
+    setMobileChat(false);
+  }
+  function sendMessage() {
+    chat.sendMessage();
+    setArchived(false);
+  }
+  function attachFiles(files) {
+    const error = chat.attachFiles(files);
+    if (error) setNotice(error);
+    setArchived(false);
+  }
+  function closeSearch() {
+    setSearchOpen(false);
+    setMessageSearch('');
+  }
 
-  return (
-    <div className="flex h-full bg-surface text-on-surface">
-      {/* Cột trái: danh sách hội thoại / bạn bè */}
-      <aside className={`${chatOpen ? 'hidden' : 'flex'} w-full flex-col border-r bg-white md:flex md:w-80`}>
-        <header className="flex items-center gap-2 border-b p-4">
-          <img src="/favicon.svg" alt="" className="h-8 w-8" />
-          <h1 className="text-lg font-semibold">S-Call</h1>
-        </header>
-        <div className="flex-1 overflow-y-auto p-4 text-sm text-secondary">
-          <p className="mb-3">Danh sách hội thoại sẽ hiển thị ở đây.</p>
-          <button
-            className="rounded-lg bg-primary-container px-3 py-2 text-white md:hidden"
-            onClick={() => setChatOpen(true)}
-          >
-            Mở khung chat (mobile)
-          </button>
-        </div>
-        <footer className="border-t p-3">
-          <StatusBadge health={health} />
-        </footer>
-      </aside>
-
-      {/* Cột phải: khung chat và màn hình gọi */}
-      <main className={`${chatOpen ? 'flex' : 'hidden'} flex-1 flex-col md:flex`}>
-        <header className="flex items-center gap-3 border-b bg-white p-4">
-          <button className="md:hidden" onClick={() => setChatOpen(false)} aria-label="Quay lại">
-            ←
-          </button>
-          <h2 className="font-medium">Khung chat</h2>
-        </header>
-        <div className="flex flex-1 items-center justify-center p-6 text-outline">
-          Chọn một cuộc trò chuyện để bắt đầu
-        </div>
-      </main>
-    </div>
-  );
+  return <div className={`chat-workspace ${dark ? 'chat-dark' : ''} ${tab === 'chat' && mobileChat ? 'chat-mobile-open' : ''} ${tab === 'friends' ? 'friends-active' : ''} ${tab === 'settings' ? 'settings-active' : ''}`} onKeyDown={(event) => {
+    if (event.key === 'Escape') { setDetailsOpen(false); setNewChat(false); }
+  }}>
+    <ChatSidebar tab={tab} dark={dark} profile={profile} onTabChange={changeTab} onToggleTheme={() => setDark((current) => !current)} />
+    {tab === 'settings' ? <SettingsWorkspace profile={profile} onSave={(next) => { saveProfile(next); setNotice('Đã lưu thông tin trong phiên này.'); }} /> : tab === 'friends' ? <FriendsWorkspace model={friends} onNotice={setNotice} onMessage={(user) => selectConversation({ id: user.id, name: user.displayName, avatar: user.avatar, isOnline: !!user.isOnline })} /> : <>
+    <ConversationList people={chat.people} activeId={chat.active?.id} tab={tab} filter={filter} archived={archived} onSelect={selectConversation} onNewConversation={() => setNewChat(true)} onFilterChange={setFilter} onToggleArchive={() => setArchived((current) => !current)} />
+    <main className="chat-main" aria-label={chat.active ? `Cuộc trò chuyện với ${chat.active.name}` : 'Tin nhắn'}>
+      {chat.active ? <>
+      <ChatHeader key={`header-${chat.active.id}`} active={chat.active} searchOpen={searchOpen} onBack={() => setMobileChat(false)} onToggleDetails={() => setDetailsOpen((current) => !current)} onShowDetails={() => setDetailsOpen(true)} onToggleSearch={() => setSearchOpen((current) => !current)} onArchiveChange={setArchived} onUpdate={chat.updateConversation} onNotice={setNotice} />
+      {searchOpen && <div className="chat-message-search"><input aria-label="Nội dung cần tìm" placeholder="Tìm tin nhắn…" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} autoFocus /><button type="button" onClick={closeSearch}>Đóng</button></div>}
+      <div className="chat-body">
+        <MessageList active={chat.active} history={chat.history} messageSearch={messageSearch} />
+        {detailsOpen && <ConversationDetails active={chat.active} history={chat.history} onClose={() => setDetailsOpen(false)} onTogglePin={() => chat.updateConversation({ pinned: !chat.active.pinned })} />}
+      </div>
+      <MessageComposer key={`composer-${chat.active.id}`} draft={chat.draft} onDraftChange={chat.setDraft} onSend={sendMessage} onAttach={attachFiles} />
+      </> : <div className="chat-conversation-start"><h2>Chọn một cuộc trò chuyện</h2><p>Chọn một người bạn để bắt đầu nhắn tin.</p></div>}
+    </main>
+    </>}
+    {notice && <div className="chat-toast" role="status">{notice}<button type="button" onClick={() => setNotice('')} aria-label="Đóng thông báo">×</button></div>}
+    <NewConversationDialog open={newChat} people={friends.friends.map((user) => ({ ...user, name: user.displayName }))} onClose={() => setNewChat(false)} onSelect={selectConversation} />
+  </div>;
 }
