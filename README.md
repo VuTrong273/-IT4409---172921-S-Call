@@ -290,13 +290,14 @@ docker compose ps                                   # trạng thái
 
 ## 11. Ghi chú cho Frontend/Backend Dev
 
-**Cảnh báo bảo mật:** với `APP_ENV=development` backend bật `GET /dev/emails` và trường `debugOtp` (để hiển thị OTP/mail cảnh báo
+**Cảnh báo bảo mật:** với `APP_ENV=development` backend bật `GET /dev/emails` và trường `debugOtp` (để hiển thị OTP / mail cảnh báo
 trên màn hình theo yêu cầu demo). Khi công khai ra Internet hãy đổi secret trong `.env`; chỉ giữ chế độ này trong lúc demo.
 
 **Backend** (`backend/`) – đã có: Express, `/api/v1/health`, kết nối Postgres / MinIO, hàm ký URL tải file (`storage.js`),
 sinh credential TURN (`turn.js`), khung WebSocket tại `/ws` (xác thực bằng ticket, mã đóng 4001/4003/4004/4009, ping/pong).
 Cần làm: các route theo `doc/[S-Call] openapi.yaml`, các sự kiện chat / call theo `doc/[S-Call] asyncapi.yaml`. 
-Mật khẩu trong seed là bcrypt `$2a$` (tương thích `bcryptjs`).
+Mật khẩu trong seed là bcrypt `$2a$` (tương thích `bcryptjs`). 
+Cài đặt thêm Helmet để bảo vệ và tránh bị lộ HTTP headers.
 
 **Frontend** (`frontend/`) – đã có: Vite + React 19 + Tailwind 4, layout responsive (2 cột desktop / 1 cột mobile), `lib/api.js`
 (gọi `/api/v1`), `lib/socket.js` (luồng lấy ws-ticket rồi mở WebSocket). Dùng đường dẫn tương đối (`/api/v1`, `/ws`) để chạy được
