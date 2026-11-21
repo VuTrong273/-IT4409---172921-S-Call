@@ -11,8 +11,8 @@ export default function ProfileAvatarEditor({ profile, onChange, onBusyChange })
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
-      setError('Chọn ảnh JPG, PNG hoặc WebP có dung lượng tối đa 2 MB.');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setError('Chọn ảnh JPG, PNG hoặc WebP có dung lượng tối đa 5 MB.');
       return;
     }
     setError('');
@@ -39,7 +39,7 @@ export default function ProfileAvatarEditor({ profile, onChange, onBusyChange })
     <Avatar contact={profile} />
     <div className="settings-avatar-copy">
       <h3>Ảnh đại diện</h3>
-      <p>JPG, PNG hoặc WebP · Tối đa 2 MB</p>
+      <p>JPG, PNG hoặc WebP · Tối đa 5 MB</p>
       <div className="settings-avatar-actions">
         <button type="button" className="settings-button settings-button-secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Đang đọc ảnh…' : 'Chọn ảnh'}</button>
         {profile.avatarUrl && <button type="button" className="settings-text-button" disabled={busy} onClick={() => { onChange(''); setError(''); }}>Xóa ảnh</button>}

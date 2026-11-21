@@ -3,7 +3,7 @@ import { Icon, IconButton } from './ChatPrimitives.jsx';
 
 const emojis = ['😊', '❤️', '👍', '😂', '👋', '🎉', '🔥', '✨'];
 
-export default function MessageComposer({ draft, onDraftChange, onSend, onAttach }) {
+export default function MessageComposer({ draft, onDraftChange, onSend, onAttach, sendWithEnter = true }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const composerRef = useRef(null);
   const fileRef = useRef(null);
@@ -20,7 +20,8 @@ export default function MessageComposer({ draft, onDraftChange, onSend, onAttach
     event.target.value = '';
   }
   function handleKeyDown(event) {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) send(event);
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (!event.shiftKey && (event.ctrlKey || event.metaKey || (sendWithEnter && !event.altKey))) send(event);
   }
   function insertEmoji(emoji) {
     onDraftChange((current) => current + emoji);

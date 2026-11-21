@@ -3,4 +3,5 @@ export const WORKSPACE_PATHS = {
   friends: '/app/friends',
   calls: '/app/calls',
   settings: '/app/settings',
+  profile: '/app/profile',
 };

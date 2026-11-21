@@ -198,3 +198,7 @@
 
 .chat-avatar-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--chat-soft); color: var(--chat-text); font-size: 14px; font-weight: 600; }
 .chat-avatar-initials img, .chat-profile .chat-avatar-initials img { width: 22px; height: 22px; border-radius: 0; }
+.chat-font-small { --chat-message-size: 13px; }
+.chat-font-medium { --chat-message-size: 14px; }
+.chat-font-large { --chat-message-size: 17px; }
+.chat-bubble, .chat-compose-field textarea { font-size: var(--chat-message-size, 14px); }

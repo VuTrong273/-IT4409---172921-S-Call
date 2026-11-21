@@ -15,11 +15,11 @@ export default function ChatSidebar({ tab, dark, onTabChange, onToggleTheme, pro
         onClick={(event) => { if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) onTabChange(); }}
       ><Icon name={name} /></NavLink>)}
       <img src={asset('31ae3.svg')} alt="" className="chat-rail-divider" />
-      <NavLink to={WORKSPACE_PATHS.settings} className={`chat-icon-button ${tab === 'settings' ? 'is-active' : ''}`} aria-label="Cài đặt tài khoản" title="Cài đặt tài khoản" onClick={onTabChange}><Icon name="settings" /></NavLink>
+      <NavLink to={WORKSPACE_PATHS.settings} className={`chat-icon-button ${tab === 'settings' ? 'is-active' : ''}`} aria-label="Cài đặt" title="Cài đặt" onClick={onTabChange}><Icon name="settings" /></NavLink>
     </div>
     <div className="chat-rail-bottom">
       <button type="button" className={`chat-theme-switch ${dark ? 'is-dark' : ''}`} role="switch" aria-checked={dark} aria-label="Giao diện tối" onClick={onToggleTheme}><img src={asset('9ded2.svg')} alt="" /></button>
-      <NavLink to={WORKSPACE_PATHS.settings} className="chat-profile" aria-label="Hồ sơ cá nhân" title="Hồ sơ cá nhân" onClick={onTabChange}><Avatar contact={profile} /></NavLink>
+      <NavLink to={WORKSPACE_PATHS.profile} className="chat-profile" aria-label="Hồ sơ của tôi" title="Hồ sơ của tôi" onClick={onTabChange}><Avatar contact={profile} /></NavLink>
     </div>
   </nav>;
 }

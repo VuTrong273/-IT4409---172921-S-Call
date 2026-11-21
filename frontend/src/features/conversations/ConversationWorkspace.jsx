@@ -3,7 +3,10 @@ import { WORKSPACE_PATHS } from '../../app/workspaceRoutes.js';
 import FriendsWorkspace from '../friends/FriendsWorkspace.jsx';
 import useFriends from '../friends/hooks/useFriends.js';
 import SettingsWorkspace from '../settings/SettingsWorkspace.jsx';
-import useProfile from '../settings/hooks/useProfile.js';
+import useProfile from '../profile/hooks/useProfile.js';
+import ProfilePanel from '../profile/ProfilePanel.jsx';
+import useAppearance from '../settings/hooks/useAppearance.js';
+import usePreferences from '../settings/hooks/usePreferences.js';
 import { useEffect, useState } from 'react';
 import useConversations from './hooks/useConversations.js';
 import ChatSidebar from './components/ChatSidebar.jsx';
@@ -23,7 +26,8 @@ export default function ConversationWorkspace({ tab }) {
   const [filter, setFilter] = useState('');
   const [archived, setArchived] = useState(false);
   const [mobileChat, setMobileChat] = useState(false);
-  const [dark, setDark] = useState(false);
+  const { theme, setTheme, dark } = useAppearance();
+  const { preferences, updatePreference } = usePreferences();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [messageSearch, setMessageSearch] = useState('');
@@ -72,12 +76,12 @@ export default function ConversationWorkspace({ tab }) {
     setMessageSearch('');
   }
 
-  return <div className={`chat-workspace ${dark ? 'chat-dark' : ''} ${tab === 'chat' && mobileChat ? 'chat-mobile-open' : ''} ${tab === 'friends' ? 'friends-active' : ''} ${tab === 'settings' ? 'settings-active' : ''}`} onKeyDown={(event) => {
+  return <div className={`chat-workspace chat-font-${preferences.fontSize} ${dark ? 'chat-dark' : ''} ${tab === 'chat' && mobileChat ? 'chat-mobile-open' : ''} ${tab === 'friends' ? 'friends-active' : ''} ${tab === 'settings' ? 'settings-active' : ''} ${tab === 'profile' ? 'profile-active' : ''}`} onKeyDown={(event) => {
     if (event.key === 'Escape') { setDetailsOpen(false); setNewChat(false); }
   }}>
-    <ChatSidebar tab={tab} dark={dark} profile={profile} onTabChange={changeTab} onToggleTheme={() => setDark((current) => !current)} />
-    {tab === 'settings' ? <SettingsWorkspace profile={profile} onSave={(next) => { saveProfile(next); setNotice('Đã lưu thông tin trong phiên này.'); }} /> : tab === 'friends' ? <FriendsWorkspace model={friends} onNotice={setNotice} onMessage={(user) => selectConversation({ id: user.id, name: user.displayName, avatar: user.avatar, isOnline: !!user.isOnline })} /> : <>
-    <ConversationList people={chat.people} activeId={chat.active?.id} tab={tab} filter={filter} archived={archived} onSelect={selectConversation} onNewConversation={() => setNewChat(true)} onFilterChange={setFilter} onToggleArchive={() => setArchived((current) => !current)} />
+    <ChatSidebar tab={tab} dark={dark} profile={profile} onTabChange={changeTab} onToggleTheme={() => setTheme(dark ? 'light' : 'dark')} />
+    {tab === 'settings' ? <SettingsWorkspace profile={profile} theme={theme} onThemeChange={setTheme} preferences={preferences} onPreferenceChange={updatePreference} /> : tab === 'friends' ? <FriendsWorkspace model={friends} onNotice={setNotice} onMessage={(user) => selectConversation({ id: user.id, name: user.displayName, avatar: user.avatar, isOnline: !!user.isOnline })} /> : <>
+    {tab === 'profile' ? <ProfilePanel profile={profile} onSave={(next) => { saveProfile(next); setNotice('Đã lưu hồ sơ trong phiên này.'); }} /> : <ConversationList people={chat.people} activeId={chat.active?.id} tab={tab} filter={filter} archived={archived} onSelect={selectConversation} onNewConversation={() => setNewChat(true)} onFilterChange={setFilter} onToggleArchive={() => setArchived((current) => !current)} />}
     <main className="chat-main" aria-label={chat.active ? `Cuộc trò chuyện với ${chat.active.name}` : 'Tin nhắn'}>
       {chat.active ? <>
       <ChatHeader key={`header-${chat.active.id}`} active={chat.active} searchOpen={searchOpen} onBack={() => setMobileChat(false)} onToggleDetails={() => setDetailsOpen((current) => !current)} onShowDetails={() => setDetailsOpen(true)} onToggleSearch={() => setSearchOpen((current) => !current)} onArchiveChange={setArchived} onUpdate={chat.updateConversation} onNotice={setNotice} />
@@ -86,7 +90,7 @@ export default function ConversationWorkspace({ tab }) {
         <MessageList active={chat.active} history={chat.history} messageSearch={messageSearch} />
         {detailsOpen && <ConversationDetails active={chat.active} history={chat.history} onClose={() => setDetailsOpen(false)} onTogglePin={() => chat.updateConversation({ pinned: !chat.active.pinned })} />}
       </div>
-      <MessageComposer key={`composer-${chat.active.id}`} draft={chat.draft} onDraftChange={chat.setDraft} onSend={sendMessage} onAttach={attachFiles} />
+      <MessageComposer key={`composer-${chat.active.id}`} draft={chat.draft} onDraftChange={chat.setDraft} onSend={sendMessage} onAttach={attachFiles} sendWithEnter={preferences.sendWithEnter} />
       </> : <div className="chat-conversation-start"><h2>Chọn một cuộc trò chuyện</h2><p>Chọn một người bạn để bắt đầu nhắn tin.</p></div>}
     </main>
     </>}

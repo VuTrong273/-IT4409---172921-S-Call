@@ -1,0 +1,19 @@
+.profile-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--chat-border); background: var(--chat-panel); }
+.profile-header { display: flex; align-items: center; gap: 8px; min-height: 64px; border-bottom: 1px solid var(--chat-border); padding: 12px 18px; }
+.profile-header h1 { font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
+.profile-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 24px; }
+.profile-panel .settings-avatar-editor { flex-direction: column; gap: 14px; padding-block: 26px; text-align: center; }
+.profile-panel .settings-avatar-actions { justify-content: center; }
+.profile-panel .settings-avatar-editor > .chat-avatar, .profile-panel .settings-avatar-editor .chat-avatar-image { width: 88px; height: 88px; }
+.profile-panel .settings-avatar-editor .chat-avatar-initials { font-size: 28px; }
+.profile-panel .settings-avatar-editor .chat-avatar-initials img { width: 32px; height: 32px; }
+.profile-panel .settings-account-grid { grid-template-columns: 1fr; }
+.profile-panel .settings-form-footer { gap: 14px; }
+.profile-panel .settings-form-footer > div { width: 100%; }
+.profile-panel .settings-form-footer .settings-button { flex: 1; padding-inline: 10px; }
+.profile-panel .settings-field > span { flex-wrap: wrap; gap: 4px 8px; }
+.chat-workspace.profile-active { grid-template-columns: 72px clamp(310px, 27vw, 380px) minmax(0, 1fr); }
+.chat-profile[aria-current="page"] { outline: 2px solid var(--chat-accent); outline-offset: 4px; }
+@media (min-width: 1600px) { .chat-workspace.profile-active { grid-template-columns: 76px 380px minmax(0, 1fr); } }
+@media (max-width: 1199px) { .chat-workspace.profile-active { grid-template-columns: 68px 310px minmax(0, 1fr); } }
+@media (max-width: 767px) { .chat-workspace.profile-active { grid-template-columns: 64px minmax(0, 1fr); } .profile-scroll { padding-inline: 18px; } .profile-header { padding-inline: 12px; } }
