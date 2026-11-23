@@ -105,6 +105,13 @@ docker compose down    # dừng, giữ dữ liệu
 docker compose down -v # dừng và xoá dữ liệu
 ```
 
+### khi đã chạy trên cloudflare tunnel
+
+```powershell
+docker compose --profile tunnel down    # dừng, giữ dữ liệu
+docker compose --profile tunnel down -v # dừng và xoá dữ liệu
+```
+
 ## 4. Tài khoản demo (Seed Data)
 
 Mật khẩu chung cho **mọi** tài khoản: `Scall@2026`. Email dạng `<username>@scall.local`.
@@ -145,10 +152,12 @@ Dữ liệu hội thoại: 3 chat 1-1 (`minhanh`–`quocbao` có ảnh, tin thu 
 ├── doc/                            # PRD, OpenAPI, AsyncAPI, ERD, Sequence Diagram, Test Cases
 ├── docker/minio/seed/              # Ảnh đại diện, file đính kèm mẫu (khớp với seed SQL)
 ├── backend/                        # Express + ws + pg + minio (khung)
-│   └── src/{index,config,db,storage,turn,ws}.js, routes/health.js
+│   └── src/{index,config,db,storage,turn,ws}.js
+│       └── routes/health.js
 └── frontend/                       # React 19 + Vite + Tailwind 4 (khung)
     ├── nginx.conf                  # Reverse proxy cho bản prod
-    └── src/{main.jsx,App.jsx,index.css}, lib/{api,socket}.js
+    └── src/{main.jsx,App.jsx,index.css}
+        └── lib/{api,socket}.js
 ```
 
 ## 6. Chế độ phát triển (hot-reload)
@@ -186,11 +195,13 @@ Nginx của `frontend` là điểm vào duy nhất, nên **chỉ cần một Pub
 
 Yêu cầu: tài khoản Cloudflare và một tên miền đã thêm vào Cloudflare.
 
-1. Vào [Cloudflare Zero Trust](https://one.dash.cloudflare.com) → **Networks → Tunnels → Create a tunnel** → chọn **Cloudflared**, đặt tên (ví dụ `scall`).
+1. Vào [Cloudflare Zero Trust](https://one.dash.cloudflare.com) → **Networks → Tunnels → Create a tunnel** → chọn **Cloudflared**, đặt tên (`scall`).
 2. Ở bước cài đặt, chọn Docker và sao chép **token** (chuỗi dài sau `--token`).
-3. Tab **Public Hostname → Add**:
+3. Tab **Routes → Add route**:
    - Subdomain/Domain: ví dụ `scall.example.com`
    - Service: **Type `HTTP`**, **URL `frontend:80`**
+   - Thêm Domain và cập nhật DNS do Cloudflare cung cấp vào trang cung cấp dịch vụ tên miền (bao gồm cả DNS của SMTP)
+   - Chờ đợi Domain và chứng chỉ SSL/TLS Active
 4. Sửa `.env`:
 
    ```env
@@ -206,6 +217,8 @@ Yêu cầu: tài khoản Cloudflare và một tên miền đã thêm vào Cloudf
    ```
 
 6. Mở https://scall.example.com. Kiểm tra: `docker compose logs cloudflared` phải có dòng `Registered tunnel connection`.
+
+Tên miền chính thức: https://scall.comviser.com (chỉ vào được khi máy admin đang mở)
 
 ### Cách B – Quick Tunnel (thử nhanh, không cần tài khoản/tên miền)
 
@@ -231,7 +244,7 @@ WebRTC truyền âm thanh/hình ảnh trực tiếp (UDP) giữa hai trình duy�
 - Hai thiết bị **cùng mạng LAN/Wi-Fi**: hoạt động ngay với cấu hình mặc định (dùng STUN).
 - Hai thiết bị **khác mạng** (ví dụ 4G và Wi-Fi): thường cần TURN relay. Chọn một trong hai cách:
 
-### Cách 1 – Dùng Coturn trong Compose (cần IP công khai)
+### Cách 1 – Dùng Coturn trong Compose (cần IP công khai, khả năng bị nhà mạng chặn cao)
 
 1. Mở/chuyển tiếp (port-forward) trên router về máy chạy Docker: **UDP + TCP 3478** và **UDP 49160–49200**.
    Cho phép trong Windows Firewall.
@@ -262,6 +275,8 @@ Khi đó có thể dừng container `coturn`: `docker compose stop coturn`.
 
 > Nếu không cấu hình TURN, cuộc gọi cùng mạng vẫn bình thường; cuộc gọi khác mạng có thể không kết nối được
 > (hiển thị trạng thái "Kết nối thất bại" theo thiết kế).
+
+Kiểm thử TURN / STUN qua: https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
 
 ## 9. Lệnh thường dùng
 

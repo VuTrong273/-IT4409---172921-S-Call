@@ -147,7 +147,7 @@ BEGIN
     ------------------------------------------------------------------
     INSERT INTO users (id, email, username, display_name, bio, password_hash, avatar_object_key,
                        role, status, last_seen_at, password_changed_at, created_by, created_at) VALUES
-    (u_super,   'superadmin@scall.local', 'superadmin', 'Quản trị cấp cao',     'Tài khoản vận hành hệ thống S-Call', v_pw, NULL,
+    (u_super,   'vuductrong205@gmail.com', 'superadmin', 'Quản trị cấp cao',     'Tài khoản vận hành hệ thống S-Call', v_pw, NULL,
         'super_admin', 'active', now() - interval '30 minutes', NULL, NULL, now() - interval '30 days'),
     (u_admin,   'admin@scall.local',      'admin',      'Admin Hệ Thống',       'Hỗ trợ & kiểm duyệt người dùng',     v_pw, NULL,
         'admin',       'active', now() - interval '1 hour',     NULL, u_super, now() - interval '29 days'),
@@ -373,7 +373,7 @@ BEGIN
         (u_admin, 'user.delete',            u_ghost,   '{"reason":"Người dùng gửi yêu cầu xóa tài khoản cá nhân"}'::jsonb,            '127.0.0.1', now() - interval '1 day');
 
     INSERT INTO email_outbox (to_email, template, subject, body, payload, status, attempts, created_at, sent_at) VALUES
-        ('superadmin@scall.local', 'super_admin_login_alert', '[S-Call] Cảnh báo: Super Admin vừa đăng nhập',
+        ('vuductrong205@gmail.com', 'super_admin_login_alert', '[S-Call] Cảnh báo: Super Admin vừa đăng nhập',
          E'Tài khoản Super Admin vừa đăng nhập.\nThời gian: gần đây\nIP: 127.0.0.1\nNếu không phải bạn, hãy kiểm tra hệ thống ngay.',
          '{"ip":"127.0.0.1"}'::jsonb, 'sent', 1, now() - interval '30 minutes', now() - interval '30 minutes'),
         ('minhanh@scall.local', 'password_reset_otp', '[S-Call] Mã OTP đặt lại mật khẩu',
