@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 
 const english = {
+  'Vui lòng nhập họ và tên.': 'Please enter your full name.',
+  'Mã đã hết hạn. Vui lòng gửi lại mã mới.': 'This code has expired. Request a new code.',
+  'Bạn đã nhập sai 5 lần. Vui lòng gửi lại mã mới.': 'You have entered an incorrect code five times. Request a new code.',
+  'Mã xác minh chưa chính xác. Vui lòng thử lại.': 'The verification code is incorrect. Please try again.',
   "Quay lại đăng nhập": "Back to login",
   "Tôi có tài khoản rồi": "I already have an account",
   "Tạo tài khoản để trò chuyện và giữ liên lạc với những người bạn quan tâm.": "Create an account to chat and stay in touch with the people you care about.",

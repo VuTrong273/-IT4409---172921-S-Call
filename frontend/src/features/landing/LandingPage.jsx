@@ -143,7 +143,6 @@ function LandingContent() {
           <p className="landing-footer-tagline">{t("Nơi dành cho những cuộc trò chuyện có ý nghĩa")}</p>
         </div>
         <div className="landing-footer-bottom">
-          <span className="landing-copyright">© 2026 S-Call</span>
           <LanguageSelect value={language} onChange={setLanguage} label={t("Ngôn ngữ")} />
         </div>
       </div>

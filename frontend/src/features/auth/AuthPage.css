@@ -18,5 +18,5 @@
 .auth-button-primary { @apply bg-primary-container text-white hover:bg-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary-container disabled:cursor-wait disabled:opacity-60; }
 .auth-button-outline { @apply border border-primary-container text-primary hover:bg-primary-fixed; }
 .auth-button-secondary { @apply bg-surface-container-low text-on-surface hover:bg-surface-container; }
-.auth-footer { @apply border-t border-outline-variant/40 bg-surface-container-low; }
-.auth-footer-inner { @apply flex min-h-[84px] w-full items-center justify-between gap-4 px-5 py-4 text-xs text-secondary sm:px-8 xl:px-10; }
+.auth-footer { @apply border-t border-outline-variant/40 bg-white; }
+.auth-footer-inner { @apply flex min-h-[84px] w-full items-center justify-end gap-4 px-5 py-4 text-xs text-secondary sm:px-8 xl:px-10; }

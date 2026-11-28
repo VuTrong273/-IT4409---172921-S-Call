@@ -1,7 +1,9 @@
 import { WORKSPACE_PATHS } from '../../../app/workspaceRoutes.js';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { api, setAccessToken } from '../../../lib/api.js';
+import { api } from '../../../lib/api.js';
+import { useAuth } from '../../../app/providers/AuthProvider.jsx';
+import { demoLogin } from '../demoAccount.js';
 
 function apiErrorMessage(error) {
   if (error.code === 'INVALID_CREDENTIALS') return 'Email/username hoặc mật khẩu chưa chính xác.';
@@ -16,6 +18,7 @@ function apiErrorMessage(error) {
 export default function useAuthForm(mode) {
   const isRegister = mode === 'register';
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [values, setValues] = useState({ email: '', username: '', displayName: '', identifier: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,8 +42,8 @@ export default function useAuthForm(mode) {
       const body = isRegister
         ? { email: values.email.trim(), username: values.username.trim(), displayName: values.displayName.trim(), password: values.password }
         : { identifier: values.identifier.trim(), password: values.password };
-      const result = await api(isRegister ? '/auth/register' : '/auth/login', { method: 'POST', body });
-      setAccessToken(result.tokens.accessToken);
+      const result = (!isRegister && demoLogin(body.identifier, body.password)) || await api(isRegister ? '/auth/register' : '/auth/login', { method: 'POST', body });
+      signIn(result);
       navigate(WORKSPACE_PATHS.chat);
     } catch (requestError) {
       setError(apiErrorMessage(requestError));

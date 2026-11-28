@@ -1,24 +1,51 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Avatar } from './ChatPrimitives.jsx';
 
-export default function NewConversationDialog({ open, people, onClose, onSelect }) {
+export default function NewConversationDialog({ open, people, onClose, onCreateGroup }) {
   const dialogRef = useRef(null);
   const titleId = useId();
+  const [name, setName] = useState('');
+  const [selected, setSelected] = useState([]);
+  const members = people.filter((person) => selected.includes(person.id));
+  const canCreate = name.trim() && members.length >= 2;
+
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (open && !dialog.open) dialog.showModal();
-    else if (!open && dialog.open) dialog.close();
+    if (open && !dialog.open) {
+      setName('');
+      setSelected([]);
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
   }, [open]);
 
-  function dismissBackdrop(event) {
-    if (event.target !== dialogRef.current) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+  function create(event) {
+    event.preventDefault();
+    if (canCreate) onCreateGroup(name, members);
   }
 
-  return <dialog ref={dialogRef} className="chat-dialog" aria-labelledby={titleId} onCancel={onClose} onClose={onClose} onClick={dismissBackdrop}>
-    <header><h2 id={titleId}>Bắt đầu trò chuyện</h2><button type="button" onClick={onClose} aria-label="Đóng">×</button></header>
-    <p>{people.length ? 'Chọn một người bạn để bắt đầu trò chuyện.' : 'Chưa có bạn bè để bắt đầu trò chuyện.'}</p>
-    <div>{people.map((person) => <button type="button" key={person.id} onClick={() => onSelect(person)}><Avatar contact={person} /><strong>{person.name}</strong></button>)}</div>
+  return <dialog ref={dialogRef} className="chat-dialog" aria-labelledby={titleId} onClose={onClose}
+    onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation(); }}>
+    <header>
+      <h2 id={titleId}>Tạo nhóm trò chuyện</h2>
+      <button type="button" onClick={onClose} aria-label="Đóng">×</button>
+    </header>
+    <p>Đặt tên và chọn ít nhất hai người bạn để tạo nhóm.</p>
+    <form className="chat-group-form" onSubmit={create}>
+      <label>Tên nhóm<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} /></label>
+      <fieldset>
+        <legend>Thành viên ({members.length} đã chọn)</legend>
+        {people.length === 0 && <p>Chưa có bạn bè để thêm vào nhóm.</p>}
+        {people.map((person) => <label key={person.id} className="chat-member-choice">
+          <input type="checkbox" checked={selected.includes(person.id)} onChange={(event) => {
+            const checked = event.target.checked;
+            setSelected((current) => checked ? [...current, person.id] : current.filter((id) => id !== person.id));
+          }} />
+          <Avatar contact={person} />{person.name}
+        </label>)}
+      </fieldset>
+      <button type="submit" className="chat-action-primary" disabled={!canCreate}>Tạo nhóm</button>
+    </form>
   </dialog>;
 }

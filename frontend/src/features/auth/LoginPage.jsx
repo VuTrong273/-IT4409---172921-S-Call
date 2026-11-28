@@ -9,7 +9,7 @@ import './LoginPage.css';
 
 export default function LoginPage() {
   const { language, setLanguage, t } = useLoginLanguage(true);
-  const { values, update, submit, busy, error, setError, passwordError } = useAuthForm('login');
+  const { values, update, submit, busy, error, passwordError } = useAuthForm('login');
 
   return <div className="auth-page auth-login">
     <main className="login-layout">
@@ -33,7 +33,7 @@ export default function LoginPage() {
               {error && <div role="alert" className="auth-error">{t(error)}</div>}
               <button disabled={busy} className="auth-button auth-button-primary login-submit">{busy ? t('Đang xử lý...') : t('Đăng nhập')}</button>
             </form>
-            <div className="login-forgot-password"><button type="button" onClick={() => setError('Chức năng khôi phục mật khẩu chưa khả dụng. Vui lòng thử lại sau.')}>{t('Quên mật khẩu?')}</button></div>
+            <div className="login-forgot-password"><Link to="/forgot-password">{t('Quên mật khẩu?')}</Link></div>
             <Link to="/register" className="auth-button auth-button-outline login-register-link">{t('Tạo tài khoản mới')}</Link>
           </div>
         </div>
